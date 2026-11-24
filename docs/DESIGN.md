@@ -603,9 +603,18 @@ the rise only pays while that room is genuinely there and a pass that hugs the p
 the side is read from the corner doing the judging, never from the curvature under the car, because an S-bend
 flips it between the apex and the sample. One pass may only move it so far — a step limit, not the stored
 clamp — because a wide track hands a single pass enough clearance to swing the corner by a dozen metres a second
-at once. Two things void what a pass measured: a hit, read as a three-g step in the horizontal acceleration inside
+at once. Two things void what a pass measured, with one exception behind them: a hit, read as a three-g step in the horizontal acceleration inside
 one sample, voids the whole pass for four quiet seconds after it and leaves the corner to the next one; a slide past twenty degrees voids only the
-deduction, because a wide line under a spin says nothing about where the corner's limit is.
+deduction, because a wide line under a spin says nothing about where the corner's limit is; and a hit that landed
+off the road is the corner being too fast rather than bad data, so it pays the step limit instead of being
+discarded.
+
+**Two apparent gaps are deliberate.** A corner that never asks for a lift is never judged at all — entry needs
+the corner's own speed to sit below what the car is carrying — and that is right: it means the corner's model
+speed is above what the car brings, so there is nothing there to learn. A pass that produced no slide earns the
+coarse rise rather than a measurement, and that stands for now: it is the honest side to err on, since the
+alternative is a corner left untouched while everything around it learns.
+
 Neither survives the race — the reset that prepares a car clears both — so the field earns its braking and its
 corner speeds again over the laps that follow, and nothing carries between sessions. Two other mechanisms are
 often mistaken for learning and are not: the memory layer
