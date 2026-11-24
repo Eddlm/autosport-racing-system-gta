@@ -4822,20 +4822,19 @@ const float RequirementLookaheadSeconds = 3.95f;
             return sum / samples * ElevationToSlopeSine;
         }
 
-        // The tyre root answers a circle, and on a wide radius it asks for more than any car can use. Above
-        // the knee the ask bends into a ceiling, with tanh matching the root's own slope there so nothing
-        // below the knee moves at all; the ceiling is the most the plan may ever ask, flat out included.
-        const float RouteSpeedTaperKneeMph = 120f;
-        const float RouteSpeedTaperCeilingMph = 190f;
+        // The tyre root answers a circle and over-asks on a wide radius. The knee sits at one radius's own
+        // speed and the ceiling at another's, both read from the same root so the pair scales with the car's
+        // grip; tanh matches the root's slope at the knee, so nothing below the knee moves at all.
+        const float RouteSpeedTaperKneeRadiusM = 150f;
+        const float RouteSpeedTaperCeilingRadiusM = 300f;
 
-        float RouteIdealSpeedForRadius(float r) => RouteSpeedTaper(ApexSpeedWithDownforce(r));
-
-        float RouteSpeedTaper(float rootMps)
+        float RouteIdealSpeedForRadius(float r)
         {
-            float knee = ARS.MphToMps(RouteSpeedTaperKneeMph);
-            float ceiling = ARS.MphToMps(RouteSpeedTaperCeilingMph);
-            float excess = rootMps - knee;
-            if (excess <= 0f) return rootMps;
+            float root = ApexSpeedWithDownforce(r);
+            float knee = ApexSpeedWithDownforce(RouteSpeedTaperKneeRadiusM);
+            float ceiling = ApexSpeedWithDownforce(RouteSpeedTaperCeilingRadiusM);
+            float excess = root - knee;
+            if (excess <= 0f) return root;
             return knee + (ceiling - knee) * (float)Math.Tanh(excess / (ceiling - knee));
         }
 
