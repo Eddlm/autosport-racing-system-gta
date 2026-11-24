@@ -949,7 +949,7 @@ namespace ARS
             rivalPaceMenu.Add(cornerOffsetItem);
             HookListTextPicker(cornerOffsetItem);
 
-            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Road Curvature Offset (mph)", "Raises the speed the road's curvature allows ahead. Only the slower of this and Corner Speed Offset applies.", SettingsRepair.OptionsFor("RouteOffset"));
+            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Road Curvature Offset (mph)", "Seeds the speed the road's curvature allows ahead; the route learner moves it from there within 10 mph either way. Only the slower of this and Corner Speed Offset applies.", SettingsRepair.OptionsFor("RouteOffset"));
             routeOffsetItem.ItemChanged += (sender, args) =>
             {
                 RouteOffsetMph = int.Parse(routeOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);

@@ -216,6 +216,7 @@ namespace ARS
         float _speedCornerArrival;
         float _speedRoute;
         float _routeSpeedOffsetMph;
+        float _routeOffsetSeedMph;
 
         public float ThrottleWanted { get { return _thrWanted; } }
         public float ThrottleFinal { get { return _thrFinal; } }
@@ -409,6 +410,7 @@ namespace ARS
         const float RouteSpeedLearnSteerMin = 0.05f;
         const float RouteSpeedLearnWidenMetres = 0.5f;
         const float RouteSpeedLearnFallShareOfRate = 0.5f;
+        const float RouteSpeedLearnLimitMph = 10f;
                 const float RouteSpeedLearnMinStabilityCap = 0.999f;
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedLastSampleMs = -1;
@@ -727,6 +729,8 @@ namespace ARS
             _cornerModeApexPassedAt = -1;
             _cornerSpeedAuthority = false;
             _apexRampActive = false;
+            _routeOffsetSeedMph = ARS.RouteOffsetMph;
+            _routeSpeedOffsetMph = _routeOffsetSeedMph;
             _lapOdometer = 0;
             _lastLapNode = -1;
             _lapStartNode = -1;
@@ -2700,7 +2704,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             // live route term over ApexRampMs, and the corner's state keeps its verdict window for CornerVerdictMs.
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
             float cornerArrivalTerm = cornerArrival + ARS.MphToMps(ARS.CornerOffsetMph);
-            float routeTerm = followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph + _routeSpeedOffsetMph);
+            float routeTerm = followTrackSpd + ARS.MphToMps(_routeSpeedOffsetMph);
 
             if (_cornerMode)
             {
@@ -3767,7 +3771,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             ARS.DrawText(pos, text, Color.White, 0.5f);
         }
 
-        // His rules, remade: the fall is unchanged (washing out), the rise reads the car's own trajectory
+        // The learner's rules: the fall is the wash-out, the rise reads the car's own trajectory
         // instead of a car-over-track band. It rises off corner mode only, under a route demand below the
         // full-throttle line, with the half-second projection nearer the inside than the car is, a slide worth
         // at least a fifth of the peak, and a stability cap nobody has cut.
@@ -3775,10 +3779,17 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             float step = RouteSpeedLearnRateMph * TickScale;
 
+            // The row seeds the offset and stays live: moving it carries the learned share with it.
+            if (ARS.RouteOffsetMph != _routeOffsetSeedMph)
+            {
+                SetRouteSpeedOffset(_routeSpeedOffsetMph + ARS.RouteOffsetMph - _routeOffsetSeedMph);
+                _routeOffsetSeedMph = ARS.RouteOffsetMph;
+            }
+
             if (IsWashingOut())
             {
                 if (Brain.CurrentIntention.Term != SpeedTerm.Route) return;
-                _routeSpeedOffsetMph = Math.Max(0f, _routeSpeedOffsetMph - step * RouteSpeedLearnFallShareOfRate);
+                SetRouteSpeedOffset(_routeSpeedOffsetMph - step * RouteSpeedLearnFallShareOfRate);
                 return;
             }
 
@@ -3792,7 +3803,13 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (TRLateralAtSpeed <= 0.01f || float.IsNaN(slideAbs)) return;
             if (slideAbs < TRLateralAtSpeed * RouteSpeedLearnMinSlideShare) return;
             if (Control.MaxThrottleFromStability < RouteSpeedLearnMinStabilityCap) return;
-            _routeSpeedOffsetMph += step;
+            SetRouteSpeedOffset(_routeSpeedOffsetMph + step);
+        }
+
+        // One writer for the offset, so its bound lives in one place: the row seeds it, the learner moves it.
+        void SetRouteSpeedOffset(float value)
+        {
+            _routeSpeedOffsetMph = ARS.Clamp(value, -RouteSpeedLearnLimitMph, RouteSpeedLearnLimitMph);
         }
 
         // The rise reads the same measurement as the fall, from below its threshold: the projection is outside the

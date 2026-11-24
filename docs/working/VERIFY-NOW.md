@@ -1,12 +1,35 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **2048** (`1740ca1c1c7900e0`). The ten changes described here are 1981's, **AP** is the newest, then **AO**, **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2 m/s per pass since 2025 (`CornerSpeedLearnNoSlideRiseMps` `2`, was 2.5 from 1999, 4 in 1997, 0.05 before that); clearance converts at half a metre per second per metre since 2026 (`CornerSpeedLearnMetreToOffset` `0.5`, was 1 from 1996, 0.66 before that, 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2 m/s (`CornerSpeedLearnDeltaLimitMps`, 2.5 until 2025), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **2050** (`19533741c83c5c5c`). Every section from **AF** up is **compile-only**; **AQ** is the newest, then **AP**, **AO**, **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, **AF**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **76 open rows below**; everything already driven or disposed of
+**Section P is closed** (all eighteen verified). **77 open rows below**; everything already driven or disposed of
 sits in **Answered** at the bottom, out of the way, with **81** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
+
+---
+
+## AQ · 2026-11-24 (2050) — the route offset is one number, seeded by the row and bounded at ±10
+
+⬜ Not driven. Compile-only.
+
+The route learner used to move a share that the menu row was added to, floored at zero: the row was a baseline
+and the learner could only add to it, with no ceiling at all. It is one number now — the row seeds it when the
+racer initialises, the learner moves it from there, and the route term reads that single value. A row set at the
+top of its ladder no longer starts the car twice as far up as the row says.
+
+Both moves ride one bound, `RouteSpeedLearnLimitMph`, the row's own ladder in the row's own unit, applied in one
+setter (`SetRouteSpeedOffset`) so the rise and the fall cannot disagree about it. **The fall can cross zero now**,
+which it could not before: a car that keeps washing out under a raised row walks the offset back down past the
+row instead of parking on it.
+
+The row stays live: moving it mid-race shifts the offset by the difference and carries whatever the learner had
+earned (`_routeOffsetSeedMph` holds the value that shift was last taken from), so a menu change lands without a
+reload.
+
+What to judge: whether the car now holds a raised row instead of drifting past it, and whether a fall that can go
+under the row over-slows a car that washes out once.
 
 ---
 
