@@ -411,6 +411,7 @@ namespace ARS
         const float RouteSpeedLearnWidenMetres = 0.5f;
         const float RouteSpeedLearnFallShareOfRate = 0.5f;
         const float RouteSpeedLearnLimitMph = 20f;
+        static readonly bool RouteSpeedLearningEnabled = false; // parked while the trim is dialled: the offset then sits on its row
                 const float RouteSpeedLearnMinStabilityCap = 0.999f;
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedLastSampleMs = -1;
@@ -3785,6 +3786,8 @@ const float RequirementLookaheadSeconds = 3.95f;
                 SetRouteSpeedOffset(_routeSpeedOffsetMph + ARS.RouteOffsetMph - _routeOffsetSeedMph);
                 _routeOffsetSeedMph = ARS.RouteOffsetMph;
             }
+
+            if (!RouteSpeedLearningEnabled) return;
 
             if (IsWashingOut())
             {
