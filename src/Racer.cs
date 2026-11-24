@@ -4800,32 +4800,32 @@ const float RequirementLookaheadSeconds = 3.95f;
             return sum / samples * ElevationToSlopeSine;
         }
 
-        // The tyre root answers a circle and over-asks on a wide radius. The trim is linear from the knee to
-        // the crossover - the curve dialled by eye - and then exponential at the SAME slope into a floor it
-        // approaches and never reaches, so every wider radius still loses a little more speed. 999 m is the
-        // route's "no bend in the band" code rather than a radius, and it takes no trim at all.
+        // The tyre root answers a circle and over-asks on a wide radius. Below the knee nothing is trimmed; from
+        // knee to crossover the depth is the line dialled by eye; past the crossover it keeps decaying as a power
+        // law, so the formula has no end and no floor. Strength scales the whole depth - 1 is the dialled curve,
+        // 0.9 buys a few m/s everywhere it acts - and 999 m is the open-road code, never trimmed.
         const float RouteSpeedTaperKneeRadiusM = 100f;
         const float RouteSpeedTaperCrossoverRadiusM = 400f;
         const float RouteSpeedTaperCrossoverShare = 0.5f;
-        const float RouteSpeedTaperFloorShare = 0.4f;
+        const float RouteSpeedTaperTailDecay = 0.45f;
+        const float RouteSpeedTaperStrength = 1f;
         const float RouteRadiusOpenM = 999f;
 
         float RouteIdealSpeedForRadius(float r)
         {
             float root = ApexSpeedWithDownforce(r);
             if (r >= RouteRadiusOpenM) return root;
-            float trim;
+            float baseTrim;
             if (r <= RouteSpeedTaperCrossoverRadiusM)
             {
                 float span = RouteSpeedTaperCrossoverRadiusM - RouteSpeedTaperKneeRadiusM;
-                trim = 1f - (1f - RouteSpeedTaperCrossoverShare) * (r - RouteSpeedTaperKneeRadiusM) / span;
+                baseTrim = 1f - (1f - RouteSpeedTaperCrossoverShare) * (r - RouteSpeedTaperKneeRadiusM) / span;
             }
             else
             {
-                float tail = RouteSpeedTaperCrossoverShare - RouteSpeedTaperFloorShare;
-                float length = tail * (RouteSpeedTaperCrossoverRadiusM - RouteSpeedTaperKneeRadiusM) / (1f - RouteSpeedTaperCrossoverShare);
-                trim = RouteSpeedTaperCrossoverShare - tail * (1f - (float)Math.Exp(-(r - RouteSpeedTaperCrossoverRadiusM) / length));
+                baseTrim = RouteSpeedTaperCrossoverShare * (float)Math.Pow(RouteSpeedTaperCrossoverRadiusM / r, RouteSpeedTaperTailDecay);
             }
+            float trim = 1f - RouteSpeedTaperStrength * (1f - baseTrim);
             return root * ARS.Clamp(trim, 0f, 1f);
         }
 
