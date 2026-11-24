@@ -4380,8 +4380,6 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         const float RouteRadiusFarEndSeconds = 2f;
         const float RouteRadiusSpanSeconds = 1f;
-        // The band reports the mean of its two tightest nodes, not its single worst one.
-        const int RouteRadiusMeanCount = 2;
 
         float RouteRadiusWindow(float endSeconds, ref int nearNode, ref int midNode, ref int farNode)
         {
@@ -4395,8 +4393,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             int carNode = CurrentTrackPoint.Node;
             float r = 999f;
             int tightestNode = -1;
-            float[] tightest = new float[RouteRadiusMeanCount];
-            for (int i = 0; i < tightest.Length; i++) tightest[i] = 999f;
             for (int offset = start; offset <= end; offset++)
             {
                 int node = WrappedNode(carNode + offset);
@@ -4406,30 +4402,12 @@ const float RequirementLookaheadSeconds = 3.95f;
                     r = radius;
                     tightestNode = node;
                 }
-                if (radius >= tightest[RouteRadiusMeanCount - 1]) continue;
-                int slot = RouteRadiusMeanCount - 1;
-                while (slot > 0 && tightest[slot - 1] > radius)
-                {
-                    tightest[slot] = tightest[slot - 1];
-                    slot--;
-                }
-                tightest[slot] = radius;
             }
-
-            float sum = 0f;
-            int used = 0;
-            for (int i = 0; i < tightest.Length; i++)
-            {
-                if (tightest[i] >= 999f) break;
-                sum += tightest[i];
-                used++;
-            }
-            float bandRadius = used > 0 ? sum / used : r;
 
             nearNode = WrappedNode(carNode + start);
             midNode = tightestNode;
             farNode = WrappedNode(carNode + end);
-            return bandRadius;
+            return r;
         }
 
         // The card's own sample: RouteRadiusWindow looks forward only, so a car unwinding out of a corner
