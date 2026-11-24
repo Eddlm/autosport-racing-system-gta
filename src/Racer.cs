@@ -4804,7 +4804,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         // band, from no trim at the knee to half speed at the clamp.
         const float RouteSpeedTaperKneeRadiusM = 100f;
         const float RouteSpeedTaperCeilingRadiusM = 999f;
-        const float RouteSpeedTaperFloorShare = 0.5f;
+        const float RouteSpeedTaperFloorShare = 0.1f;
 
         float RouteIdealSpeedForRadius(float r)
         {
