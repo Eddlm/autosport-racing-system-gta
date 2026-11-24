@@ -4800,20 +4800,16 @@ const float RequirementLookaheadSeconds = 3.95f;
             return sum / samples * ElevationToSlopeSine;
         }
 
-        // The tyre root answers a circle and over-asks on a wide radius. The knee sits at one radius's own
-        // speed and the ceiling at another's, both read from the same root so the pair scales with the car's
-        // grip; tanh matches the root's slope at the knee, so nothing below the knee moves at all.
-        const float RouteSpeedTaperKneeRadiusM = 50f;
-        const float RouteSpeedTaperCeilingRadiusM = 500f;
+        // The tyre root answers a circle and over-asks on a wide radius: the ask is scaled down across the
+        // band, from no trim at the knee to half speed at the clamp.
+        const float RouteSpeedTaperKneeRadiusM = 100f;
+        const float RouteSpeedTaperCeilingRadiusM = 999f;
+        const float RouteSpeedTaperFloorShare = 0.5f;
 
         float RouteIdealSpeedForRadius(float r)
         {
-            float root = ApexSpeedWithDownforce(r);
-            float knee = ApexSpeedWithDownforce(RouteSpeedTaperKneeRadiusM);
-            float ceiling = ApexSpeedWithDownforce(RouteSpeedTaperCeilingRadiusM);
-            float excess = root - knee;
-            if (excess <= 0f) return root;
-            return knee + (ceiling - knee) * (float)Math.Tanh(excess / (ceiling - knee));
+            return ApexSpeedWithDownforce(r)
+                * ARS.Remap(r, RouteSpeedTaperKneeRadiusM, RouteSpeedTaperCeilingRadiusM, 1f, RouteSpeedTaperFloorShare, true);
         }
 
         // The grip of the road under the bend the route term is about to ask for: the radius is sampled over a
