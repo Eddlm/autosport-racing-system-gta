@@ -4800,16 +4800,29 @@ const float RequirementLookaheadSeconds = 3.95f;
             return sum / samples * ElevationToSlopeSine;
         }
 
-        // The tyre root answers a circle and over-asks on a wide radius: the ask is scaled down across the
-        // band, from no trim at the knee to half speed at the clamp.
+        // The tyre root answers a circle and over-asks on a wide radius. The trim is linear from the knee to
+        // the crossover - the curve dialled by eye - and then exponential at the SAME slope into a floor it
+        // approaches and never reaches, so every wider radius still loses a little more speed.
         const float RouteSpeedTaperKneeRadiusM = 100f;
-        const float RouteSpeedTaperCeilingRadiusM = 400f;
-        const float RouteSpeedTaperFloorShare = 0.5f;
+        const float RouteSpeedTaperCrossoverRadiusM = 400f;
+        const float RouteSpeedTaperCrossoverShare = 0.5f;
+        const float RouteSpeedTaperFloorShare = 0.4f;
 
         float RouteIdealSpeedForRadius(float r)
         {
-            float trim = ARS.Remap(r, RouteSpeedTaperKneeRadiusM, RouteSpeedTaperCeilingRadiusM, 1f, RouteSpeedTaperFloorShare);
-            return ApexSpeedWithDownforce(r) * ARS.Clamp(trim, RouteSpeedTaperFloorShare, 1f);
+            float trim;
+            if (r <= RouteSpeedTaperCrossoverRadiusM)
+            {
+                float span = RouteSpeedTaperCrossoverRadiusM - RouteSpeedTaperKneeRadiusM;
+                trim = 1f - (1f - RouteSpeedTaperCrossoverShare) * (r - RouteSpeedTaperKneeRadiusM) / span;
+            }
+            else
+            {
+                float tail = RouteSpeedTaperCrossoverShare - RouteSpeedTaperFloorShare;
+                float length = tail * (RouteSpeedTaperCrossoverRadiusM - RouteSpeedTaperKneeRadiusM) / (1f - RouteSpeedTaperCrossoverShare);
+                trim = RouteSpeedTaperCrossoverShare - tail * (1f - (float)Math.Exp(-(r - RouteSpeedTaperCrossoverRadiusM) / length));
+            }
+            return ApexSpeedWithDownforce(r) * ARS.Clamp(trim, 0f, 1f);
         }
 
         // The grip of the road under the bend the route term is about to ask for: the radius is sampled over a
