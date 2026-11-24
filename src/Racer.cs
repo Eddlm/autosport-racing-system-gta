@@ -4825,8 +4825,8 @@ const float RequirementLookaheadSeconds = 3.95f;
         // The tyre root answers a circle and over-asks on a wide radius. The knee sits at one radius's own
         // speed and the ceiling at another's, both read from the same root so the pair scales with the car's
         // grip; tanh matches the root's slope at the knee, so nothing below the knee moves at all.
-        const float RouteSpeedTaperKneeRadiusM = 100f;
-        const float RouteSpeedTaperCeilingRadiusM = 200f;
+        const float RouteSpeedTaperKneeRadiusM = 50f;
+        const float RouteSpeedTaperCeilingRadiusM = 500f;
 
         float RouteIdealSpeedForRadius(float r)
         {
