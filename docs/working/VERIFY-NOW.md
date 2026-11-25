@@ -1,6 +1,6 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **2090** (`4b1ee31c966b`). Every section from **AF** up is **compile-only**; **AS** is the newest, then **AR** (visually verified), **AQ**, **AP**, **AO**, **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, **AF**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **2090** (`4b1ee31c966b`). **AS** is verified (2026-11-26) and **AR** visually verified; every other section from **AF** up is **compile-only** — **AQ**, **AP**, **AO**, **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, **AF**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
@@ -12,7 +12,8 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ## AS · 2026-11-25 (2087 → 2090) — the route term becomes a per-section target speed
 
-⬜ Not driven. Compile-only.
+✅ **Verified in game 2026-11-26** (your words: «Testing the build, the system now works as
+intended, so the core is proven»).
 
 Behind the same persisted `Route Speed Points` checkbox — default OFF as shipped in 2087 (static default, `KeySpec`
 seed and stored ini line all False, so the A/B was a menu flip; you flipped it back ON to test) — the route term is
