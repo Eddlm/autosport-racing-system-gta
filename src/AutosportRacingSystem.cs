@@ -121,7 +121,7 @@ namespace ARS
         public static bool BrakeLearning = true;
         public static bool BrakeLearningNotify = false;
         public static bool CornerSpeedLearning = true;
-        public static bool RouteSpeedPoints = true;
+        public static bool RouteSpeedPoints = false;
         public static bool CornerSpeedLearnNotify = true;
         public static bool SlideBrakeCap = true;
         public static float MaxCrestLift = 0.4f;
@@ -979,7 +979,7 @@ namespace ARS
             };
             rivalPaceMenu.Add(cornerSpeedLearningItem);
 
-            NativeCheckboxItem routeSpeedPointsItem = new NativeCheckboxItem("Route Speed Points", "Follow a per-node table of speed offsets owned by each AI racer. Phase 1 seeds every 50th node where the swept curve radius is between 150 and 900 m and keeps every offset at 0, so the car drives exactly as it did; the switch only gates the addition. Off leaves the route term untouched.", RouteSpeedPoints);
+            NativeCheckboxItem routeSpeedPointsItem = new NativeCheckboxItem("Route Speed Points", "On: the route term is a per-section target speed - every 50th node whose swept curve radius is between 150 and 900 m carries one absolute speed, read from the route's own ideal-speed law (apex speed with downforce, tapered by radius), bounded 0 to the intended-speed ceiling; the old route speed system (its physics base and its scalar row) is decoupled while on, and a tick with no active point falls back to the old term. Off: the old route term, untouched.", RouteSpeedPoints);
             routeSpeedPointsItem.CheckboxChanged += (sender, args) =>
             {
                 RouteSpeedPoints = routeSpeedPointsItem.Checked;

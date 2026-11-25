@@ -1,6 +1,6 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **2086** (`62daa140e4e6fe6a`). Every section from **AF** up is **compile-only**; **AR** is the newest, then **AQ**, **AP**, **AO**, **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, **AF**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **2087** (`702d86904666a8a8`). Every section from **AF** up is **compile-only**; **AS** is the newest, then **AR** (visually verified), **AQ**, **AP**, **AO**, **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, **AF**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
@@ -10,9 +10,33 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
 
-## AR · 2026-11-25 (2086) — per-node route speed offsets, wired inert
+## AS · 2026-11-25 (2087) — the route term becomes a per-section target speed
 
 ⬜ Not driven. Compile-only.
+
+Behind the same persisted `Route Speed Points` checkbox — now **default OFF**: the static default, the `KeySpec`
+seed and your stored ini line were all flipped False so the A/B starts from today's baseline — the route term is
+no longer the physics base plus an offset: it IS the per-section speed. Each seeded point (every 50th node,
+swept radius 150–900 m) stores `TargetSpeedMps` from `RouteIdealSpeedForRadius(point.Radius)` — the route's own
+ideal-speed law, apex speed with downforce tapered by the road — written once per route revision by the seeding,
+the setter's only caller, bounded 0 to the intended-speed ceiling. While the switch is on the old route speed
+system (its physics base, its scalar offset row and the surface/slope/crest scaling it carried) is decoupled; a
+tick with no active point falls back to the old base, so the car never stands down to 0. Off is the old term,
+untouched.
+
+Readouts: the four world labels and the subtitle's third line print the point's target speed in m/s (the advance
+log prints `tgt` where it printed `off`). The cursor logic is untouched — still keyed to
+`LookAheads[LookAhead.OneSec]` per your ruling.
+
+Pass condition: switch on — the car drives the seeded speeds and the labels show real speeds; switch off —
+today's baseline returns unchanged; `[ROUTEPOINT]` lines keep firing on advances, now as `tgt`.
+
+---
+
+## AR · 2026-11-25 (2086) — per-node route speed offsets, wired inert
+
+◐ Visually verified in game (your words, 2026-11-25: «visuals working well»); the readout half of the pass
+condition is met, the no-behaviour-change clause below is still yours to judge.
 
 The AI's route term now follows a per-racer table of node-keyed speed offsets alongside the existing global
 scalar. Every offset is 0 and the persisted `Route Speed Points` checkbox (on by default) gates only the

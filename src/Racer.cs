@@ -477,8 +477,9 @@ namespace ARS
             return context;
         }
 
-        // Phase 1: every offset is 0. One predicate decides both the entry point and every advance - the
-        // active point is the first one the 1 s lookahead has not crossed yet, in track order.
+        // One absolute target speed per point, written at seed time from the route's ideal-speed law. One predicate
+        // decides both the entry point and every advance - the active point is the first one the 1 s lookahead has
+        // not crossed yet, in track order.
         void SyncRouteSpeedPoints()
         {
             if (_routeSpeedRevisionSeeded == ARS.CornersRevision) return;
@@ -491,15 +492,19 @@ namespace ARS
                 TrackPoint point = ARS.TrackPoints[node];
                 if (point.SweepCurveRadius < RouteSpeedPointMinRadiusMetres
                     || point.SweepCurveRadius > RouteSpeedPointMaxRadiusMetres) continue;
-                _routeSpeedPoints.Add(new RouteSpeedPoint(point.Node, point.SweepCurveRadius));
+                // The stored speed is the route's own ideal-speed law at that radius - apex speed with downforce, tapered.
+                RouteSpeedPoint entry = new RouteSpeedPoint(point.Node, point.SweepCurveRadius);
+                entry.SetTargetSpeedMps(RouteIdealSpeedForRadius(entry.Radius));
+                _routeSpeedPoints.Add(entry);
             }
         }
 
-        float RouteSpeedPointOffsetMps()
+        float RouteSpeedPointTargetSpeedMps(float fallbackMps)
         {
             SyncRouteSpeedPoints();
             RouteSpeedPoint point = ActiveRouteSpeedPoint();
-            return point == null ? 0f : point.OffsetMps;
+            // No active point (no table yet, or the track seeded none): the old base still owns the speed - never a 0 m/s stand-down.
+            return point == null ? fallbackMps : point.TargetSpeedMps;
         }
 
         RouteSpeedPoint ActiveRouteSpeedPoint()
@@ -537,7 +542,7 @@ namespace ARS
                 + (_routeSpeedCursor == 0 ? " wrap" : "")
                 + " node " + point.Node
                 + " r " + point.Radius.ToString("0", CultureInfo.InvariantCulture)
-                + " off " + point.OffsetMps.ToString("0.0", CultureInfo.InvariantCulture));
+                + " tgt " + point.TargetSpeedMps.ToString("0.0", CultureInfo.InvariantCulture));
         }
 
         void SyncCornerContexts()
@@ -2782,8 +2787,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             // live route term over ApexRampMs, and the corner's state keeps its verdict window for CornerVerdictMs.
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
             float cornerArrivalTerm = cornerArrival + ARS.MphToMps(ARS.CornerOffsetMph);
-            float routeTerm = followTrackSpd + ARS.MphToMps(_routeSpeedOffsetMph)
-                + (ARS.RouteSpeedPoints ? RouteSpeedPointOffsetMps() : 0f);
+            // Route Speed Points on: the seeded per-section target IS the route term - the old route speed
+            // system (physics base, scalar row) decouples while on. Off: the old term, untouched.
+            float routeTerm = ARS.RouteSpeedPoints
+                ? RouteSpeedPointTargetSpeedMps(followTrackSpd + ARS.MphToMps(_routeSpeedOffsetMph))
+                : followTrackSpd + ARS.MphToMps(_routeSpeedOffsetMph);
 
             if (_cornerMode)
             {
@@ -3933,7 +3941,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         // Constant subtitle, for tuning: the learned offset, and the number that now decides it - the car's
         // own projection against the car, in lateral metres. Positive but under the widen threshold is what earns
         // a rise; at or past that threshold it is the wash-out the fall answers.
-        // Four offsets at their own positions: the active point and the next three, wrapping on circuits.
+        // Four points at their own positions, each printing its target speed: the active one and the next three, wrapping on circuits.
         public void DrawRouteSpeedPointOffsets()
         {
             if (_routeSpeedPoints.Count == 0 || _routeSpeedCursor < 0) return;
@@ -3947,7 +3955,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 }
                 RouteSpeedPoint point = _routeSpeedPoints[index];
                 if (point.Node < 0 || point.Node >= ARS.TrackPoints.Count) continue;
-                string text = "#" + index + " " + point.OffsetMps.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "mps";
+                string text = "#" + index + " " + point.TargetSpeedMps.ToString("0.0", CultureInfo.InvariantCulture) + "mps";
                 ARS.DrawText(ARS.TrackPoints[point.Node].Position + Vector3.WorldUp * 2.5f,
                     text, i == 0 ? Color.LimeGreen : Color.White, 0.5f);
             }
@@ -3963,7 +3971,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 ? "~w~route points: none"
                 : "~w~#" + _routeSpeedCursor + " n" + _activeRouteSpeedPoint.Node
                     + " r" + _activeRouteSpeedPoint.Radius.ToString("0", CultureInfo.InvariantCulture)
-                    + " " + _activeRouteSpeedPoint.OffsetMps.ToString("0.0", CultureInfo.InvariantCulture) + "mps";
+                    + " " + _activeRouteSpeedPoint.TargetSpeedMps.ToString("0.0", CultureInfo.InvariantCulture) + "mps";
             UI.ShowSubtitle(first + "~n~" + second + "~n~" + third, 50);
         }
 
