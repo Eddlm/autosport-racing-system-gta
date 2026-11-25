@@ -406,7 +406,7 @@ namespace ARS
         const float RouteSpeedLearnWidenMetres = 0.5f;
         const float RouteSpeedLearnFallShareOfRate = 0.5f;
         const float RouteSpeedLearnLimitMph = 20f;
-        static readonly bool RouteSpeedLearningEnabled = false;
+        static readonly bool RouteSpeedLearningEnabled = false; // parked while the trim is dialled: the offset then sits on its row
                 const float RouteSpeedLearnMinStabilityCap = 0.999f;
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedLastSampleMs = -1;
@@ -455,7 +455,7 @@ namespace ARS
             return context;
         }
 
-        // A point never trusts its own node: it takes the tightest swept radius within half the seed spacing.
+        // Every 50th node seeds unconditionally: tightest swept radius within half the spacing, then the prune hands corner ground away.
         void SyncRouteSpeedPoints()
         {
             if (_routeSpeedRevisionSeeded == ARS.CornersRevision) return;
@@ -556,6 +556,8 @@ namespace ARS
                 else if (toPoint < -nodeCount / 2) toPoint += nodeCount;
             }
             toPoint += fwdLook;
+            // The advance line fires when the cursor moves, trusted or not: the gate must not swallow it.
+            if (_routeSpeedCursor != startCursor) LogRouteSpeedPointAdvance(startCursor, selected);
             // Trusted only within the car's 2 s horizon: a farther point's curve-baked speed would cap the straight.
             if (toPoint < 0 || toPoint > twoSecFwd)
             {
@@ -563,13 +565,11 @@ namespace ARS
                 return null;
             }
             _activeRouteSpeedPoint = selected;
-            if (_routeSpeedCursor != startCursor) LogRouteSpeedPointAdvance(startCursor);
-            return _activeRouteSpeedPoint;
+            return selected;
         }
 
-        void LogRouteSpeedPointAdvance(int fromCursor)
+        void LogRouteSpeedPointAdvance(int fromCursor, RouteSpeedPoint point)
         {
-            RouteSpeedPoint point = _activeRouteSpeedPoint;
             ARS.Log(ARS.LogImportance.Error, "[ROUTEPOINT build " + ARS.ReadBuildNumber() + "] "
                 + Name + " cursor " + fromCursor + "->" + _routeSpeedCursor
                 + (_routeSpeedCursor == 0 ? " wrap" : "")
@@ -2497,6 +2497,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 + heldSpeed.ToString("0.0", CultureInfo.InvariantCulture) + " m/s");
         }
 
+        // `judge: false` is the early release: the corner stopped asking for a lift before its apex.
         void ExitCornerMode(float routeTerm, string why, bool judge = true)
         {
             if (!_cornerMode) return;
@@ -3856,7 +3857,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         public void DrawRouteSpeedPointOffsets()
         {
-            if (_routeSpeedPoints.Count == 0 || _routeSpeedCursor < 0) return;
+            if (_routeSpeedPoints.Count == 0 || _routeSpeedCursor < 0 || _activeRouteSpeedPoint == null) return;
             for (int i = 0; i < 4; i++)
             {
                 int index = _routeSpeedCursor + i;
@@ -4783,6 +4784,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             return ForwardNodeDistance(apexNode) > count / 2;
         }
 
+        // One writer, so the ramp and the learner that grades it cannot aim at different nodes.
         int BrakeTargetDistance(int apexNode, int fallbackNode)
         {
             int targetNode = BrakeTargetBaseNode(apexNode, fallbackNode);

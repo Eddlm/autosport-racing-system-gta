@@ -21,7 +21,8 @@ Behind the same persisted `Route Speed Points` checkbox — default OFF as shipp
 seed and stored ini line all False, so the A/B was a menu flip; you flipped it back ON to test) — the route term is
 no longer the physics base plus an offset: it IS the per-section speed. Each seeded point (every 50th node) takes
 the **tightest swept radius within half the seed spacing on each side** (25 nodes each way at spacing 50 — adjacent
-points' windows then tile the whole route with no gap) as its own `Radius` — your overshoot law, sharpened in
+points' windows tile the route wherever points survive; pruned ground near corner apexes falls back to the old
+base) as its own `Radius` — your overshoot law, sharpened in
 2088→2089: seed points were leapfrogging the tight stretches between them because each trusted only its own node,
 and a first 25-node-total window still left the middle of every gap unseen — and stores `TargetSpeedMps` from
 `RouteIdealSpeedForRadius(point.Radius)` — the route's own ideal-speed law, apex speed with downforce tapered by
@@ -31,7 +32,7 @@ the road — written once per route revision, bounded 0 to the intended-speed ce
 ~1.3 km straight dead zone, measured by replicating the pass on LSIA Test Track) — then a prune pass removes
 points with a **detected corner apex within the sweep's own reach plus one node (±26 at spacing 50)** — your rule,
 confined from the first whole-spacing shape: a point near a corner hands that ground to the corner system. The
-prune logs one `[ROUTESEED]` line (seeded → kept) per route revision, so the table's density is visible in
+prune logs one `[ROUTESEED]` line (seeded → kept) per racer per route revision, so the density is visible in
 ARS.log. While the switch is on the old
 route speed system (its physics base, its scalar offset row and the surface/slope/crest scaling it carried) is
 decoupled; a tick with no active point falls back to the old base, so the car never stands down to 0. Off is the
@@ -405,7 +406,7 @@ The peak-slip-share verdict these rows tested is gone; none was driven, and all 
 
 ## Z · 2026-11-23 (1939 → 1944) — brake ramp learner with a single ideal
 
-The old three-band learner is gone. Each braking corner now keeps its own `BrakeFactor`: seed `0.60`, clamp `0.50`–`1.30`. The ideal overshoot is the shared hard-coded `Racer.BrakeRampIdealDeltaMps`, currently `0.5 m/s` over target at the fixed 15 m ramp-end node. The adjustment is `(BrakeRampIdealDeltaMps - delta) / 50`, so an arrival exactly at the ideal overshoot holds the factor; hotter arrivals lower it, cooler arrivals raise it. `BrakeLearning` gates it and `BrakeLearningNotify` gates the notice. Build 1940 removed the old lag compensation and solved the ramp directly from the remaining node distance, after a provisional 4.5 m reduction; build 1941 made zero the ideal, made the learning step `error / 50`, and changed the seed to `0.60`; build 1942 made the ideal `0.5 m/s` over target; build 1943 shared that value through one code constant used by the learner and menu description; build 1944 lowered the clamp floor to `0.50` so a fresh `0.60` seed can be corrected downward.
+The old three-band learner is gone. Each braking corner now keeps its own `BrakeFactor`: seed `0.75` (2090, driver call from `0.90`), clamp `0.33`–`1.30`. The ideal overshoot is the shared hard-coded `Racer.BrakeRampIdealDeltaMps`, currently `0.5 m/s` over target at the fixed 15 m ramp-end node. The adjustment is `(BrakeRampIdealDeltaMps - delta) / 50`, so an arrival exactly at the ideal overshoot holds the factor; hotter arrivals lower it, cooler arrivals raise it. `BrakeLearning` gates it and `BrakeLearningNotify` gates the notice. Build 1940 removed the old lag compensation and solved the ramp directly from the remaining node distance, after a provisional 4.5 m reduction; build 1941 made zero the ideal, made the learning step `error / 50`, and changed the seed to `0.60`; build 1942 made the ideal `0.5 m/s` over target; build 1943 shared that value through one code constant used by the learner and menu description; build 1944 lowered the clamp floor to `0.50` so a fresh `0.60` seed can be corrected downward.
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
@@ -430,7 +431,7 @@ The two speed terms no longer meet in a min(): the route term decides where no c
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
-| V1 | **each corner seeds at 0.60** (1893, factor now learned in 1944) | the apex debug text before any brake-learn pass | every untouched corner shows `b 0.60`; changed corners show their learned factor | ⬜ |
+| V1 | **each corner seeds at 0.75** (1893, learned in 1944, seed moved to 0.75 in 2090) | the apex debug text before any brake-learn pass | every untouched corner shows `b 0.75`; changed corners show their learned factor | ⬜ |
 
 ## W · 2026-11-22 (1896, retuned 1966) — the route band averages its tightest nodes
 
