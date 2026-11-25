@@ -428,8 +428,10 @@ namespace ARS
 
     public class CornerContext
     {
+        // The seed every initialiser and fallback derives from: one value owns all of them.
+        public const float BrakeFactorSeed = 0.75f;
         public CornerPoint Point;
-        public float BrakeFactor = 0.90f;
+        public float BrakeFactor = BrakeFactorSeed;
         public float CornerSpeedOffsetMps = 0f;
         public bool RequiresBraking = false;
     }

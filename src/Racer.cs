@@ -354,7 +354,6 @@ namespace ARS
         bool _gsFloorActiveThisTick = false;
 
         int _projectionLogAtMs = 0;
-        const float BrakeFactorSeed = 0.75f;
         const float BrakeFactorMin = 0.33f;
         const float BrakeFactorMax = 1.30f;
         public const float BrakeRampIdealDeltaMps = 0.5f;
@@ -431,7 +430,7 @@ namespace ARS
         readonly HashSet<int> _cornerSpeedLocked = new HashSet<int>();
         int _laneAvoidAt;
         int _sideBySideSteerAt;
-        public float BrakeFactorForApex(int apexNode) => TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
+        public float BrakeFactorForApex(int apexNode) => TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : CornerContext.BrakeFactorSeed;
 
         public float CornerSpeedOffsetFor(int apexNode) => ARS.CornerSpeedLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
         float _divebombBrakeBonus;
@@ -450,7 +449,7 @@ namespace ARS
         {
             if (!TryGetCornerContext(apexNode, out CornerContext context))
             {
-                context = new CornerContext { BrakeFactor = BrakeFactorSeed };
+                context = new CornerContext { BrakeFactor = CornerContext.BrakeFactorSeed };
                 _cornerContexts[apexNode] = context;
             }
             return context;
@@ -585,7 +584,7 @@ namespace ARS
             _cornersRevisionSeeded = ARS.CornersRevision;
             foreach (CornerPoint corner in ARS.Corners)
                 if (!_cornerContexts.ContainsKey(corner.Node))
-                    _cornerContexts[corner.Node] = new CornerContext { Point = corner, BrakeFactor = BrakeFactorSeed };
+                    _cornerContexts[corner.Node] = new CornerContext { Point = corner, BrakeFactor = CornerContext.BrakeFactorSeed };
 
             List<int> stale = new List<int>();
             foreach (int node in _cornerContexts.Keys)
