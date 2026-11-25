@@ -492,11 +492,32 @@ namespace ARS
                 TrackPoint point = ARS.TrackPoints[node];
                 if (point.SweepCurveRadius < RouteSpeedPointMinRadiusMetres
                     || point.SweepCurveRadius > RouteSpeedPointMaxRadiusMetres) continue;
+                // His rule: a point never trusts its own node - it takes the tightest swept radius within half the
+                // seed spacing on each side (25 nodes each way at spacing 50) as its own, so no stretch between
+                // seed nodes stays invisible.
                 // The stored speed is the route's own ideal-speed law at that radius - apex speed with downforce, tapered.
-                RouteSpeedPoint entry = new RouteSpeedPoint(point.Node, point.SweepCurveRadius);
+                RouteSpeedPoint entry = new RouteSpeedPoint(point.Node, TightestSweepRadiusNear(node, ARS.TrackPoints.Count));
                 entry.SetTargetSpeedMps(RouteIdealSpeedForRadius(entry.Radius));
                 _routeSpeedPoints.Add(entry);
             }
+        }
+
+        // The tightest swept radius within HALF the seed spacing on each side of the node - 25 nodes each way at
+        // spacing 50 - so adjacent points' windows tile the route with no gap and every node between two seed
+        // points sits inside someone's window. Circuits wrap the window; the ends of a point-to-point stage keep
+        // their half windows. A NaN node never compares smaller, so one bad sample cannot win the minimum.
+        float TightestSweepRadiusNear(int node, int count)
+        {
+            float tightest = float.MaxValue;
+            int half = RouteSpeedPointSpacingNodes / 2;
+            for (int offset = -half; offset <= half; offset++)
+            {
+                int sample = ARS.IsPointToPoint ? (int)ARS.Clamp(node + offset, 0, count - 1)
+                    : ((node + offset) % count + count) % count;
+                float radius = ARS.TrackPoints[sample].SweepCurveRadius;
+                if (radius < tightest) tightest = radius;
+            }
+            return tightest;
         }
 
         float RouteSpeedPointTargetSpeedMps(float fallbackMps)
