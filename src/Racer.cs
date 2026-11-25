@@ -206,6 +206,7 @@ namespace ARS
         readonly SmoothFloat _stabSmooth = new SmoothFloat(1f, StabSmoothRate);
         float _thrFinal;
         readonly SmoothFloat _thrSmooth = new SmoothFloat(0f, ThrottleSmoothRate);
+        readonly SmoothFloat _routeSmooth = new SmoothFloat(0f, RouteSmoothRate);
         float _thrDelta;
         float _thrTarget;
         float _thrActualMps;
@@ -1995,6 +1996,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         // The UI follower's exponential rate per second: 95% after about half a second.
         const float ThrottleSmoothRate = 6f;
         const float BrakeSmoothRate = 6f;
+        const float RouteSmoothRate = 6f;
         const float TcsSmoothRate = 6f;
         const float StabSmoothRate = 6f;
 
@@ -2758,6 +2760,15 @@ const float RequirementLookaheadSeconds = 3.95f;
             float routeTerm = ARS.RouteSpeedPoints
                 ? RouteSpeedPointTargetSpeedMps(followTrackSpd + ARS.MphToMps(_routeSpeedOffsetMph))
                 : followTrackSpd + ARS.MphToMps(_routeSpeedOffsetMph);
+            // The respected speed rides the pedal smoother toward the section target: switches taper instead
+            // of stepping. First service snaps (no ramp from the 0 seed); off leaves the old term untouched.
+            if (ARS.RouteSpeedPoints)
+            {
+                _routeSmooth.Target = routeTerm;
+                if (_routeSmooth.Value <= 0f) _routeSmooth.Value = routeTerm;
+                _routeSmooth.Advance(TickScale);
+                routeTerm = _routeSmooth.Value;
+            }
 
             if (_cornerMode)
             {

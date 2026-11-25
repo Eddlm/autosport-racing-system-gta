@@ -33,7 +33,9 @@ the road — written once per route revision, bounded 0 to the intended-speed ce
 points with a **detected corner apex within the sweep's own reach plus one node (±26 at spacing 50)** — your rule,
 confined from the first whole-spacing shape: a point near a corner hands that ground to the corner system. The
 prune logs one `[ROUTESEED]` line (seeded → kept) per racer per route revision, so the density is visible in
-ARS.log. While the switch is on the old
+ARS.log. The respected speed is smoothed: it rides a SmoothFloat at rate 6/s (the pedal gauges'
+law) toward the section target, so point switches taper instead of stepping; first service snaps
+and the apex handover ramp chases the smoothed value. While the switch is on the old
 route speed system (its physics base, its scalar offset row and the surface/slope/crest scaling it carried) is
 decoupled; a tick with no active point falls back to the old base, so the car never stands down to 0. Off is the
 old term, untouched.
