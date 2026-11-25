@@ -3867,8 +3867,10 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         public void DrawRouteSpeedPointOffsets()
         {
-            if (_routeSpeedPoints.Count == 0 || _routeSpeedCursor < 0 || _activeRouteSpeedPoint == null) return;
-            for (int i = 0; i < 4; i++)
+            // The cursor's own point plus the next four, always on screen: lime only while the cursor's
+            // point actually drives, white through trust gaps - the overlay never hides with the trust.
+            if (_routeSpeedPoints.Count == 0 || _routeSpeedCursor < 0) return;
+            for (int i = 0; i < 5; i++)
             {
                 int index = _routeSpeedCursor + i;
                 if (index >= _routeSpeedPoints.Count)
@@ -3880,7 +3882,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (point.Node < 0 || point.Node >= ARS.TrackPoints.Count) continue;
                 string text = "#" + index + " " + point.TargetSpeedMps.ToString("0.0", CultureInfo.InvariantCulture) + "mps";
                 ARS.DrawText(ARS.TrackPoints[point.Node].Position + Vector3.WorldUp * 2.5f,
-                    text, i == 0 ? Color.LimeGreen : Color.White, 0.5f);
+                    text, i == 0 && _activeRouteSpeedPoint != null ? Color.LimeGreen : Color.White, 0.5f);
             }
         }
 
