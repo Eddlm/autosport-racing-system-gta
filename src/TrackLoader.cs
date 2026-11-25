@@ -205,7 +205,9 @@ namespace ARS
         const int PointToPointEndBandNodes = 50;
 
         const float SweepRadiusDegrees = 20f;
-        const int SweepMaxNodes = 200;
+        // 20 degrees of turn costs arc = r*0.349 nodes: 350 resolves radii up to the 999 open boundary,
+        // so open sweepers reach the speed law's taper instead of reading as straight ground.
+        const int SweepMaxNodes = 350;
 
         static void ComputePointGeometry(TrackPoint point, int nodeCount)
         {
