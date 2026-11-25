@@ -1300,7 +1300,7 @@ namespace ARS
                 Alignment = Alignment.Right
             };
             AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Pedal Trail", "Draw the focus car's input trail: one chevron per metre, coloured green to red by pedal input, holding the last 40 m.");
-            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the focus car's speed above its roof, then its steer-angle fan, the corner entrance/apex/exit lines and the lane aim lines 40 nodes ahead.");
+            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the focus car's speed above its roof, then its steer-angle fan, the corner entrance/apex/exit lines, the lane aim lines 40 nodes ahead, and a sphere per shaped node along the lane-shape corridor.");
             AddDebugCheckbox(debugMenu, Options.ShowRivalry, "Show Rivalry", "Draw the two rival walls from the car's node to one second ahead: red while a rival holds one in, blue once released, plus a line from the car to each far end.");
             AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Mark every lip the route scan found with a cyan tick and a line across the road.");
             AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere over each wheel of the focus car, coloured by side-slip: white at rest, green at the peak, red where grip goes flat.");

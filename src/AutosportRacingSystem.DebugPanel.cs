@@ -116,5 +116,44 @@ namespace ARS
                 DrawText(new Vector2(centreX, PanelRadiusY), radiusText, colour, DrawTextFont.Standard, DrawTextAlign.Center, PanelRadiusScale);
             }
         }
+        // DEAD METHOD - bench instrument, not called from anywhere. Built 2026-11-25 to measure air drag against
+        // wheel thrust; the answer is in the handling notes: a_drag = coeff x 1e-4 x v^2, plus 1.40 m/s^2 of
+        // drivetrain drag that only exists while coasting in gear. Kept for top-speed testing: to revive it, add
+        // ProbeTopEnd(); to the top of OnTick and drive - one [TOPEND] line a second, throttle on and coasting alike.
+        // The speed delta between lines is the plateau signal: zero means thrust has met drag. Wheel force is
+        // m_fDriveForce at wheel+0x1D4, the engine's own post-gearing number, so thrustG already carries the gear
+        // ratio, the rev factor and the peak drop.
+        void ProbeTopEnd()
+        {
+            int now = Game.GameTime;
+            if (now - _probeLastMs < 1000) return;
+            Vehicle car = Game.Player.Character.CurrentVehicle;
+            if (!CanWeUse(car)) return;
+
+            float mps = car.Speed;
+            string dMps = "--";
+            if (_probeLastMs >= 0)
+            {
+                float dt = (now - _probeLastMs) * 0.001f;
+                dMps = ((mps - _probeLastMps) / dt).ToString("+0.00;-0.00", CultureInfo.InvariantCulture);
+            }
+            _probeLastMs = now;
+            _probeLastMps = mps;
+
+            string perWheel;
+            float thrustG = VehicleMemory.DriveForceG(car, out perWheel);
+            Log(LogImportance.Error, "[TOPEND] " + MpsToMph(mps).ToString("0.0", CultureInfo.InvariantCulture) + "mph"
+                + " d" + dMps + "mps"
+                + " thr " + VehicleMemory.GetThrottle(car).ToString("0.00", CultureInfo.InvariantCulture)
+                + " thrustG " + thrustG.ToString("0.000", CultureInfo.InvariantCulture)
+                + " wheelsG[" + perWheel + "]"
+                + " drag " + VehicleMemory.GetDragCoeff(car).ToString("0.000000", CultureInfo.InvariantCulture)
+                + " flatVel " + VehicleMemory.GetFlatVel(car).ToString("0.00", CultureInfo.InvariantCulture)
+                + " estMph " + MpsToMph(EngineTopSpeed(car)).ToString("0.0", CultureInfo.InvariantCulture));
+        }
+
+        int _probeLastMs = -1;
+        float _probeLastMps;
+
     }
 }

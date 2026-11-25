@@ -3615,7 +3615,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (ControlledByPlayer || ARS.DebugFocusRacer != this) return;
 
             CornerPoint shapedCorner = _laneShapeApexNode >= 0 ? ARS.Corners.FirstOrDefault(c => c.Node == _laneShapeApexNode) : null;
-            if (_laneShapeApexNode >= 0 && (shapedCorner == null || TrackLoader.ApexAllowsOutsideApproach(shapedCorner)))
+            if (ARS.DebugToggles[Options.ShowTrackAnalysis] && _laneShapeApexNode >= 0
+                && (shapedCorner == null || TrackLoader.ApexAllowsOutsideApproach(shapedCorner)))
             {
                 int count = ARS.TrackPoints.Count;
                 for (int direction = -1; direction <= 1; direction += 2)

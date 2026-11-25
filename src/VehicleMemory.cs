@@ -37,6 +37,28 @@ namespace ARS
 
         public static float GetInitialDriveForce(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0060);
         public static float GetDownforce(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0014);
+
+        // TEMPORARY top-end probe (delete with ProbeTopEndLine in Racer.cs): the authored drag coefficient and the
+        // live flat velocity in m/s. Both self-check against the meta - 3.0 reads 0.0003, 235 km/h reads 65.28.
+        public static float GetDragCoeff(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0010);
+        public static float GetFlatVel(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0068);
+
+        // TEMPORARY top-end probe: the sum of every wheel's m_fDriveForce (0x1D4) in g - what the engine actually
+        // applies at the wheel, after gear ratio, rev factor and peak drop - plus the per-wheel values.
+        public static unsafe float DriveForceG(Vehicle vehicle, out string perWheel)
+        {
+            perWheel = "";
+            ulong[] wheels = ARS.GetWheelPtrs(vehicle).ToArray();
+            float total = 0f;
+            for (int i = 0; i < wheels.Length; i++)
+            {
+                if (wheels[i] == 0) continue;
+                float f = *((float*)(wheels[i] + 0x1D4));
+                total += f;
+                perWheel += f.ToString("0.0000", System.Globalization.CultureInfo.InvariantCulture) + " ";
+            }
+            return total;
+        }
         public static int GetHandlingFlags(Vehicle vehicle)
         {
             ulong address = GetHandlingAddress(vehicle);
