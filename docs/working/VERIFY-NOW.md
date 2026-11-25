@@ -13,7 +13,9 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 ## AS · 2026-11-25 (2087 → 2090) — the route term becomes a per-section target speed
 
 ✅ **Verified in game 2026-11-26** (your words: «Testing the build, the system now works as
-intended, so the core is proven»).
+intended, so the core is proven»; specifically: «the car does follow the chosen speedpoint's
+speed, and only when close enough. the same car that crashed before, does not crash now, as it
+slows down appropriately» — seeded targets and the 2 s trust both read in the drive).
 
 Behind the same persisted `Route Speed Points` checkbox — default OFF as shipped in 2087 (static default, `KeySpec`
 seed and stored ini line all False, so the A/B was a menu flip; you flipped it back ON to test) — the route term is
