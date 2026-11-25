@@ -1,3 +1,4 @@
+// Developer panel: the screen-space bars for pedal, speed, margins and the Gs floor.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -14,27 +15,27 @@ namespace ARS
         const float DebugPanelTop = 0f;
         const float DebugPanelBottom = 0.3f;
         const int BarsPerPedal = 3;
-        const float PanelBarGap = 0.004f; // gap between bars, screen width fraction
-        const float SpeedDeltaFullSpanMps = 30f; // margin-bar scale: 30 m/s of margin reaches a band edge
+        const float PanelBarGap = 0.004f;
+        const float SpeedDeltaFullSpanMps = 30f;
         static readonly Color ThrottleAppliedColour = Color.LimeGreen;
-        static readonly Color ThrottleBoundColour = Color.FromArgb(235, 210, 60); // the hanging TCS pull, the stability cap and the Gs floor
+        static readonly Color ThrottleBoundColour = Color.FromArgb(235, 210, 60);
         static readonly Color BrakeBarColour = Color.Red;
-        static readonly Color SpeedMarginColour = Color.Orange; // the APEX and ROUT bars
-        static readonly Color FollowedSpeedColour = Color.DodgerBlue; // the column whose term is driving the speed
+        static readonly Color SpeedMarginColour = Color.Orange;
+        static readonly Color FollowedSpeedColour = Color.DodgerBlue;
         static readonly Color PanelLabelColour = Color.White;
-        const float PanelLabelY = 0.272f; // the label row, inside the band above its bottom edge
+        const float PanelLabelY = 0.272f;
         const float PanelLabelScale = 0.35f;
-        const float PanelIntendedY = 0.008f; // the intended speed, at the top of the APEX and ROUT columns
+        const float PanelIntendedY = 0.008f;
         const float PanelIntendedScale = 0.30f;
-        const float PanelRadiusY = 0.032f; // under the route speed: the radius that produced it, in metres
+        const float PanelRadiusY = 0.032f;
         const float PanelRadiusScale = 0.26f;
-        const float SpeedSentinelMps = 998f; // the term's own open sentinel: no corner ahead, or no finite radius
+        const float SpeedSentinelMps = 998f;
         static readonly string[] PanelLabels = { "THR", "STB", "FLR", "APEX", "ROUT", "BRAKE" };
 
         public static void DrawScreenRect(float left, float top, float right, float bottom, Color colour)
         {
-            // DRAW_RECT takes the centre and the full size, not a corner (commands_graphics.sch:688). The
-            // 9th arg is bStereo (engine takes 9, the docs list 8): false = SCRIPT_GFX_SOLID_COLOUR.
+
+            // DRAW_RECT takes the centre and the full size, and arg 9 is bStereo: the engine takes 9, the docs list 8.
             Function.Call(Hash.DRAW_RECT, (left + right) * 0.5f, (top + bottom) * 0.5f, right - left, bottom - top, colour.R, colour.G, colour.B, colour.A, false);
         }
 
@@ -47,14 +48,6 @@ namespace ARS
             DrawPanelLabels(racer, barWidth);
         }
 
-        // Six bars in the panel band, bottom edge pinned to DebugPanelBottom, an input of 1 filling the
-        // band: applied throttle, the stability cap and the brake bar ride SmoothFloat followers; the Gs
-        // floor bar shows the imposed floor (hidden when the Gs floor setting is off). Columns 4-5 are
-        // margins against the corner's arrival speed and the route ask, centred on the middle: margin
-        // above, deficit below, 30 m/s reaches a band edge. They never grey out, and the one whose term is
-        // driving the speed turns blue; the intended speed rides at the top of the band in mph, so a
-        // learned change reads as a number even when the bar has re-settled. Column 0 also carries a bar
-        // hanging from the band top down to the TCS cap line.
         static void DrawPanelBars(Racer racer, float barWidth, float speed)
         {
             if (racer == null) return;
@@ -75,7 +68,6 @@ namespace ARS
             DrawScreenRect(left, top, left + barWidth, DebugPanelBottom, colour);
         }
 
-        // A bar pinned to the band top, hanging down until its lower edge reaches the given throttle level.
         static void DrawHangingBar(float level, Color colour, float barWidth, int bar)
         {
             float bottom = DebugPanelTop + (1f - Math.Min(Math.Max(level, 0f), 1f)) * (DebugPanelBottom - DebugPanelTop);
@@ -83,9 +75,6 @@ namespace ARS
             DrawScreenRect(left, DebugPanelTop, left + barWidth, bottom, colour);
         }
 
-        // A bar centred on the band's middle: a positive margin rises above the middle, a negative one
-        // sinks below it, and |margin| = SpeedDeltaFullSpanMps reaches a band edge. Past that span the bar
-        // pins to the edge and keeps its colour: an out-of-range margin is told apart by the bar being full.
         static void DrawDeltaBar(float marginMps, Color colour, float barWidth, int bar)
         {
             float clamped = Math.Min(Math.Max(marginMps, -SpeedDeltaFullSpanMps), SpeedDeltaFullSpanMps);
@@ -116,13 +105,7 @@ namespace ARS
                 DrawText(new Vector2(centreX, PanelRadiusY), radiusText, colour, DrawTextFont.Standard, DrawTextAlign.Center, PanelRadiusScale);
             }
         }
-        // DEAD METHOD - bench instrument, not called from anywhere. Built 2026-11-25 to measure air drag against
-        // wheel thrust; the answer is in the handling notes: a_drag = coeff x 1e-4 x v^2, plus 1.40 m/s^2 of
-        // drivetrain drag that only exists while coasting in gear. Kept for top-speed testing: to revive it, add
-        // ProbeTopEnd(); to the top of OnTick and drive - one [TOPEND] line a second, throttle on and coasting alike.
-        // The speed delta between lines is the plateau signal: zero means thrust has met drag. Wheel force is
-        // m_fDriveForce at wheel+0x1D4, the engine's own post-gearing number, so thrustG already carries the gear
-        // ratio, the rev factor and the peak drop.
+
         void ProbeTopEnd()
         {
             int now = Game.GameTime;

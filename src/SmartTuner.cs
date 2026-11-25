@@ -1,3 +1,4 @@
+// Live handling tuning of rival cars from their model name and class.
 using GTA;
 using GTA.Native;
 using System;

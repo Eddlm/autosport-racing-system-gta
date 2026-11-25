@@ -1,3 +1,4 @@
+// ARS script core: state machine, race setup, tick loop and the per-frame orchestration.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -45,8 +46,7 @@ namespace ARS
 
         public static List<CornerPoint> Corners = new List<CornerPoint>();
         public static int CornersRevision = 0;
-        // Hardcoded on purpose: the radius treated as a straight. The row and its ladder are gone so no stored value
-        // can drift from the number the corner table is built with.
+
         public const int CornerCeilingMeters = 150;
 
         public static List<Bump> Bumps = new List<Bump>();
@@ -1507,9 +1507,6 @@ namespace ARS
             Log(LogImportance.Info, "Track instanced");
         }
 
-        // Corner blips: with the corner visual on, every apex gets a small yellow circle on the minimap, so the
-        // driver can read where the track goes without looking at the world markers. Rebuilt only when the track
-        // or the corner count changes; the blips are freed whenever the visual is switched off or the race ends.
         const float CornerBlipScale = 0.7f;
         readonly List<Blip> _cornerBlips = new List<Blip>();
         string _cornerBlipTrackPath;
@@ -1547,9 +1544,6 @@ namespace ARS
             _cornerBlipTrackPath = null;
         }
 
-        // A quick join from a track-start chevron is a different event from a menu race: it never reads the
-        // menu's roster, PI mode, deviation or grid size. The fleet and the three knobs are swapped for the
-        // length of the grid build and put back before the method returns, so the menu is as the driver left it.
         const int ImmersiveOpponents = 6;
         const int ImmersivePaceDeviation = 4;
         bool _immersiveJoin;
@@ -2188,8 +2182,6 @@ namespace ARS
                 if (DebugToggles[Options.ShowThrottleReason])
                     DrawThrottleReason(DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null));
 
-                // The learner only runs in the AI pedal path, so the readout picks a car that learns: the focus car
-                // if one is set, else the nearest rival - never the player's racer, whose offset can only stay zero.
                 if (raceLive && DebugToggles[Options.ShowCurveRadius])
                 {
                     Racer curveRacer = DebugFocusRacer
@@ -2316,7 +2308,6 @@ namespace ARS
 
                         if (laneSpan >= (int)Racer.SteerLookaheadMaxNodes)
                             World.DrawMarker(MarkerType.DebugSphere, laneEnd, Vector3.Zero, Vector3.Zero, new Vector3(0.35f, 0.35f, 0.35f), Color.Black);
-
 
                     }
 
@@ -2728,8 +2719,7 @@ namespace ARS
                 InstanceTrack();
                 if (!_trackInstanced) return;
             }
-            // A grid flag with no racers is a half-finished start, not a built grid: rebuild instead of
-            // trusting it, or every later press finds an empty list and blames the roster.
+
             if (_gridInstanced && Racers.Count == 0)
             {
                 Log(LogImportance.Info, "Grid was flagged instanced with no racers - rebuilding it.");
@@ -2854,18 +2844,13 @@ namespace ARS
 
         }
 
-        // Road is 1.0 and everything else this, one constant for the whole class: a modded materials.dat
-        // can move every grip in the game, so the number is ours and the classification is what is trusted.
         public const float OffRoadGrip = 0.75f;
         public static bool LastGroundMaterialHit = false;
         public static int LastGroundMaterialHash = 0;
         public static Vector3 LastGroundHit = Vector3.Zero;
-        public static int LastGroundHitModel = 0; // the raw hit handle: FromHandle is internal in SHVDN2
+        public static int LastGroundHitModel = 0;
         public static bool LastGroundProbeRejected = false;
 
-        // Road or not road under a point, for the load-time route scan: the shape test answers a material HASH
-        // and only its identity is read, because a modded materials.dat moves the multipliers but cannot turn
-        // grass into tarmac. A miss reads 1.0.
         public static float GroundGripAt(Vector3 point)
         {
             LastGroundMaterialHit = false;
@@ -2888,7 +2873,7 @@ namespace ARS
 
             int material = materialhash.GetResult<int>();
             Vector3 hit = hitpos.GetResult<Vector3>();
-            // A vertical ray strikes under the point and within its two metres; anything else is half-resolved.
+
             if (material == 0 || Math.Abs(hit.X - point.X) > 1f || Math.Abs(hit.Y - point.Y) > 1f || Math.Abs(hit.Z - point.Z) > 3f)
             {
                 LastGroundProbeRejected = true;
@@ -3239,13 +3224,9 @@ namespace ARS
 
             float vehicleGripGs = r.VehicleData.CurrentMechanicalGrip;
 
-            // A loose corner cannot be taken at tarmac speed: lateral grip scales with the surface, so the
-            // speed scales with the square root of it.
             float baseSpd = (float)Math.Sqrt(vehicleGripGs * c.SurfaceGrip * r.Handling.Gravity * radius);
             if (float.IsNaN(baseSpd) || float.IsInfinity(baseSpd)) return AiConstants.MaxIntendedSpeedMps;
 
-            // Corner speed learning rides on the same per-corner record as the brake factor: the racer's
-            // learned offset in m/s, added before the clamp. It reads 0 while inert, so the number is unchanged.
             float learnedCornerSpeed = r.CornerSpeedOffsetFor(c.Node);
             return ARS.Clamp(baseSpd + learnedCornerSpeed, AiConstants.MinIntendedSpeedMps, AiConstants.MaxIntendedSpeedMps);
         }
@@ -3870,12 +3851,6 @@ namespace ARS
             return mode;
         }
 
-        // The level is the only gate: there is no way to force a line past it, so a log left at Error costs
-        // nothing but the arguments already built at the call site. The write is the expensive part - a
-        // synchronous open/append/close on the game thread costs more than the message it stores, and a burst of
-        // corner lines (a racer choosing an apex) was a felt frame hitch - so lines are buffered and the file is
-        // appended once a second. An Error flushes at once, and OnAbort flushes whatever is left, so a hard crash
-        // costs at most the last second of lines.
         const int LogFlushMs = 1000;
         static readonly StringBuilder _logBuffer = new StringBuilder();
         static int _logFlushedAtMs;
@@ -3964,7 +3939,6 @@ namespace ARS
             return string.Empty;
         }
 
-
         string _thrHudTop = string.Empty;
         int _thrHudAt;
 
@@ -4016,8 +3990,7 @@ namespace ARS
             string label;
             if (reason == ThrottleReason.Plan)
             {
-                // The one term that is neither a corner nor the route: name it outright, because during the exit
-                // ramp that is the fact worth reading, whatever the pedal is doing.
+
                 if (term == SpeedTerm.CornerToRoute) label = "corner-route";
                 else if (wanted >= 0.995f) label = "full";
                 else if (delta <= 0f) label = "over " + SpeedTermName(term);
@@ -4050,7 +4023,6 @@ namespace ARS
                 default: return "free";
             }
         }
-
 
         static Color ThrottleColour(float delta)
         {

@@ -1,3 +1,4 @@
+// Track file IO: reading and writing the track xml and its metadata.
 using GTA;
 using GTA.Math;
 using GTA.Native;

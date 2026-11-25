@@ -1,3 +1,4 @@
+// Debug drawing of the track: nodes, widths, corners and the route editor.
 using GTA;
 using GTA.Math;
 using System;

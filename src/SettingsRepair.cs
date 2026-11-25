@@ -1,3 +1,4 @@
+// Settings schema: every declared key, its kind, its default and the orphan prune.
 using System;
 using System.Collections.Generic;
 using System.Globalization;

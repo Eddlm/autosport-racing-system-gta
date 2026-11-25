@@ -1,3 +1,4 @@
+// The free camera that flies the authored track without a car.
 using GTA;
 using GTA.Math;
 using GTA.Native;

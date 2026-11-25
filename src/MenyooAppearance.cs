@@ -1,3 +1,4 @@
+// Appearance presets applied to rival cars through Menyoo's own files.
 using GTA;
 using GTA.Native;
 using System;

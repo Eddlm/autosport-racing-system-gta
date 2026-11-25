@@ -1,3 +1,4 @@
+// Rotating loading-screen tips and the frequency setting that picks them.
 using System;
 using System.Collections.Generic;
 using System.IO;

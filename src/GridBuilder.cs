@@ -1,3 +1,4 @@
+// Start grid: slot ordering by pace and the spawn transforms it hands out.
 using GTA;
 using GTA.Math;
 using GTA.Native;

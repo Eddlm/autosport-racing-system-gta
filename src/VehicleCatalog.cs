@@ -1,3 +1,4 @@
+// Vehicle roster: model classification, the pool file and the spawn list.
 using GTA;
 using GTA.Native;
 using System;

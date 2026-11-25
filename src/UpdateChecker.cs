@@ -1,3 +1,4 @@
+// Version check against the release feed.
 using System;
 using System.IO;
 using System.Net;

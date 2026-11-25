@@ -1,3 +1,4 @@
+// In-game track authoring: node capture, section edits and saving the authored ring.
 using GTA;
 using GTA.Math;
 using System;

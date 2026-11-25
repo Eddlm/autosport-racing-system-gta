@@ -1,6 +1,6 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **2089** (`9b3f088fabadd80b`). Every section from **AF** up is **compile-only**; **AS** is the newest, then **AR** (visually verified), **AQ**, **AP**, **AO**, **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, **AF**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **2090** (`4b1ee31c966b`). Every section from **AF** up is **compile-only**; **AS** is the newest, then **AR** (visually verified), **AQ**, **AP**, **AO**, **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, **AF**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
@@ -10,34 +10,47 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
 
-## AS · 2026-11-25 (2087 → 2089) — the route term becomes a per-section target speed
+## AS · 2026-11-25 (2087 → 2090) — the route term becomes a per-section target speed
 
 ⬜ Not driven. Compile-only.
 
 Behind the same persisted `Route Speed Points` checkbox — default OFF as shipped in 2087 (static default, `KeySpec`
 seed and stored ini line all False, so the A/B was a menu flip; you flipped it back ON to test) — the route term is
-no longer the physics base plus an offset: it IS the per-section speed. Each seeded point (every 50th node, swept
-radius 150–900 m **at its own node**) takes the **tightest swept radius within half the seed spacing on each side**
-(25 nodes each way at spacing 50 — adjacent points' windows then tile the whole route with no gap) as its own
-`Radius` — your overshoot law, sharpened in 2088→2089: seed points were leapfrogging the tight stretches between
-them because each trusted only its own node, and a first 25-node-total window still left the middle of every gap
-unseen — and stores `TargetSpeedMps` from `RouteIdealSpeedForRadius(point.Radius)`
-— the route's own ideal-speed law, apex speed with downforce tapered by the road — written once per route revision
-by the seeding, the setter's only caller, bounded 0 to the intended-speed ceiling. While the switch is on the old
+no longer the physics base plus an offset: it IS the per-section speed. Each seeded point (every 50th node) takes
+the **tightest swept radius within half the seed spacing on each side** (25 nodes each way at spacing 50 — adjacent
+points' windows then tile the whole route with no gap) as its own `Radius` — your overshoot law, sharpened in
+2088→2089: seed points were leapfrogging the tight stretches between them because each trusted only its own node,
+and a first 25-node-total window still left the middle of every gap unseen — and stores `TargetSpeedMps` from
+`RouteIdealSpeedForRadius(point.Radius)` — the route's own ideal-speed law, apex speed with downforce tapered by
+the road — written once per route revision, bounded 0 to the intended-speed ceiling. The seeding is
+**generate-then-prune** (your restructure, 2090): every candidate seeds unconditionally — deep straights carry the
+999 no-bend sentinel and clamp to the ceiling (the old [150, 900] band ate 22 of 39 LSIA candidates and left a
+~1.3 km straight dead zone, measured by replicating the pass on LSIA Test Track) — then a prune pass removes
+points with a **detected corner apex within the sweep's own reach plus one node (±26 at spacing 50)** — your rule,
+confined from the first whole-spacing shape: a point near a corner hands that ground to the corner system. The
+prune logs one `[ROUTESEED]` line (seeded → kept) per route revision, so the table's density is visible in
+ARS.log. While the switch is on the old
 route speed system (its physics base, its scalar offset row and the surface/slope/crest scaling it carried) is
 decoupled; a tick with no active point falls back to the old base, so the car never stands down to 0. Off is the
 old term, untouched.
 
 Readouts: the four world labels and the subtitle's third line print the point's target speed in m/s (the advance
 log prints `tgt` where it printed `off`); the subtitle's `r` now reads the window's tightest radius. The cursor
-logic is untouched — still keyed to `LookAheads[LookAhead.OneSec]` per your ruling. The speed-to-input chain
+still keys to `LookAheads[LookAhead.OneSec]` per your ruling; on top of it a point is **trusted only inside the
+car's 2 s horizon** (your rule, 2090): the selected point must sit within [0, the `LookAhead.TwoSec` distance —
+rebuilt each tick from the car's speed] and not behind it; outside, or when a passed point is stuck on a
+point-to-point tail, `ActiveRouteSpeedPoint` returns null and the old base owns the term. That ends the
+straight-cap defect — a point whose radius bakes a curve's begin can no longer cap a straight seconds early, and
+the subtitle shows `route points: none` during the gap. The speed-to-input chain
 (metric check you asked for) is m/s end to end: `TargetSpeedMps` → `routeTerm` → `Speed` → `ConvertSpeedToPedals`
 comparing against `VehicleData.SpeedVectorLocal.Y`, no single mph call inside it — the only mph conversions are the
 menu rows', made once.
 
 Pass condition: switch on — the car holds the seeded speeds through the tight stretches between seed nodes too (no
-more leapfrog overshoot), the labels show real speeds, and the subtitle's third line shows `n/x r/tgt` advancing;
-switch off — today's baseline returns unchanged; `[ROUTEPOINT]` lines keep firing on advances, now as `tgt`.
+more leapfrog overshoot), straights seed and let the ceiling speak for them, curve approaches cap in only ~2 s
+before the trusted point (the subtitle reads `route points: none` until then), the labels show real speeds, and
+the subtitle's third line shows `n/x r/tgt` advancing; switch off — today's baseline returns unchanged;
+`[ROUTEPOINT]` lines keep firing on advances, now as `tgt`, and `[ROUTESEED]` names the table size per revision.
 
 ---
 

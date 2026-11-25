@@ -1,3 +1,4 @@
+// Shared types: constants, vehicle state, racer brain, route speed points.
 using GTA.Math;
 using System;
 using System.Collections.Generic;
@@ -346,7 +347,7 @@ namespace ARS
         public float MaxThrottleFromTCS = 1f;
         public ThrottleReason ThrottleReason = ThrottleReason.Plan;
         public float ThrottleReasonCap = 1f;
-        // What the plan asked the pedal for, before any cap, and whether a cap actually cut it this tick.
+
         public float ThrottleDemand = 0f;
         public bool ThrottleLimited = false;
         public BrakeReason BrakeReason = BrakeReason.Plan;
@@ -373,8 +374,7 @@ namespace ARS
         public int LaneShapeApex = -1;
         public int LaneShapeStart = -1;
         public int LaneShapeExit = -1;
-        // Grip under this node, sampled at load: 1 on road, OffRoadGrip on anything else. A wheel in contact
-        // is the only true source of the surface multiplier, and the route is scanned before one is there.
+
         public float SurfaceGrip = 1f;
     }
 
@@ -392,8 +392,7 @@ namespace ARS
         public float SupposedRadius = 999f;
         public float DetectedRadius = 999f;
         public float WidestRadius = 0f;
-        // The worst ground the corner covers, 1 on road: a corner with loose surface anywhere in its span
-        // is a loose corner, and its speed scales with the square root of this.
+
         public float SurfaceGrip = 1f;
 
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
@@ -434,8 +433,9 @@ namespace ARS
         public float CornerSpeedOffsetMps = 0f;
         public bool RequiresBraking = false;
     }
-    // One absolute target speed per seeded node, owned by each racer; one setter holds the bound
-    // (0 to the intended-speed ceiling), and seeding is its only caller.
+
+    // One absolute target speed per seeded node, owned by each racer; the setter holds the bound and seeding
+    // is its only caller.
     public class RouteSpeedPoint
     {
         public readonly int Node;
@@ -465,8 +465,6 @@ namespace ARS
         public Racer Target = null;
     }
 
-    // Holds a real value (Target) and a smooth chase of it (Value). Advance with real elapsed seconds:
-    // the remaining gap is gap * e^(-rate*dt), identical at any frame rate, and it never overshoots.
     public class SmoothFloat
     {
         public float Target;

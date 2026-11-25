@@ -1,3 +1,4 @@
+// Track load pipeline: path resolution, node parse and the route tables built on it.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -202,7 +203,7 @@ namespace ARS
         }
         const int GeometryWindowNodes = 10;
         const int PointToPointEndBandNodes = 50;
-        // A node's radius is the circle through a +/-SweepRadiusDegrees heading sweep, capped at SweepMaxNodes.
+
         const float SweepRadiusDegrees = 20f;
         const int SweepMaxNodes = 200;
 
@@ -362,11 +363,8 @@ namespace ARS
             if (ARS.TrackPoints.Count > 1) BuildLaneField(ARS.TrackPoints.Count);
         }
 
-        // Below this share of road grip the outside line is not worth preparing: no out approach here.
         internal const float OutsideApproachMinGrip = 0.875f;
 
-        // The worst ground the corner covers: loose surface anywhere in the span makes it a loose corner, so
-        // the minimum rather than the mean.
         static float CornerSurfaceGrip(int from, int to, int count)
         {
             int span = ARS.IsPointToPoint ? to - from : Wrap(to - from, count);
@@ -380,14 +378,13 @@ namespace ARS
             return grip;
         }
 
-        // The out-in belongs to the apex: the apex and two nodes either side are the window that must be road.
         const int ApexWindowNodes = 2;
 
         internal static bool ApexAllowsOutsideApproach(CornerPoint corner)
         {
             int count = ARS.TrackPoints.Count;
             if (corner == null || count == 0) return false;
-            // An S has no outside line to take: there is nowhere to go wide that serves both halves.
+
             if (corner.IsChicane) return false;
             for (int step = -ApexWindowNodes; step <= ApexWindowNodes; step++)
             {
@@ -398,9 +395,6 @@ namespace ARS
             return true;
         }
 
-        // One probe every SurfaceSampleNodes nodes, carried across the gap, and the route's off-road share
-        // comes out of the same pass. A probe that misses leaves the node on road, so a hole in the scan
-        // never turns the approach off.
         const int SurfaceSampleNodes = 4;
 
         static void AssignSurfaceGrip()
@@ -427,8 +421,7 @@ namespace ARS
                         if (!seen.Contains(ARS.LastGroundMaterialHash)) seen.Add(ARS.LastGroundMaterialHash);
                     }
                     else misses++;
-                    // A ray that resolves nothing is not evidence of tarmac: an unknown surface keeps the
-                    // one the sweep was already on, which is what the car would have been driving on.
+
                 }
                 ARS.TrackPoints[node].SurfaceGrip = grip;
                 if (grip < OutsideApproachMinGrip) offRoad++;
@@ -476,8 +469,7 @@ namespace ARS
             float[] crossTans = new float[corners];
             int[] shapedStarts = new int[corners];
             int[] shapedEnds = new int[corners];
-            // -1 is the sentinel the readers already understand: a shape the builder skips must not claim node 0
-            // (the start line) as its entrance.
+
             for (int c = 0; c < corners; c++)
             {
                 shapedStarts[c] = -1;
@@ -656,9 +648,9 @@ namespace ARS
         }
 
         const int FlipReachNodes = 100;
-        // Halves more different than this in radius are two corners sharing a span, not one S.
+
         const float ChicaneRadiusRatio = 1.6f;
-        // A width out each side, opposite ways; less than that is a straight being noisy.
+
         static bool FlipIsAnS(int flipNode, int count)
         {
             float width = Math.Max(1f, ARS.TrackPoints[flipNode].TrackHalfWidth * 2f);
@@ -807,7 +799,6 @@ namespace ARS
             int nodeCount = ARS.TrackPoints.Count;
             foreach (CornerPoint corner in ARS.Corners) corner.IsChicane = false;
 
-            // An S is a curvature flip confirmed by a track width either side; each corner takes the nearest one.
             int[] chicaneFlip = new int[ARS.Corners.Count];
             int[] chicaneGap = new int[ARS.Corners.Count];
             for (int i = 0; i < chicaneFlip.Length; i++) { chicaneFlip[i] = -1; chicaneGap[i] = int.MaxValue; }
@@ -849,7 +840,6 @@ namespace ARS
                     else rightRadius = Math.Min(rightRadius, radius);
                 }
 
-                // Two bends of very different size are two corners sharing a span, not one S to take in a line.
                 float ratio = Math.Max(leftRadius, rightRadius) / Math.Max(1f, Math.Min(leftRadius, rightRadius));
                 if (ratio > ChicaneRadiusRatio)
                 {
@@ -1217,7 +1207,6 @@ namespace ARS
 
             ARS.Log(ARS.LogImportance.Info, "Corner add: apex=" + apexNode + " angle=" + ARS.TrackPoints[apexNode].Angle.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " region=" + regionStart + "-" + regionEnd + " entranceStep=" + entranceStep + "/" + entranceMaxStep + (entranceStep >= entranceMaxStep ? " (at cap)" : "") + " unclampedStart=" + unclampedStart + " start=" + startPosition + (startPosition > unclampedStart ? " (clamped to regionStart)" : (startPosition == unclampedStart ? " (walk stop)" : "")) + " exitStep=" + exitStep + "/" + exitMaxStep + (exitStep >= exitMaxStep ? " (at cap)" : "") + " unclampedEnd=" + unclampedEnd + " end=" + endPosition);
 
-
             if (apexPosition - startPosition > SpanMaxDistanceNodes)
             {
                 int priorStart = startPosition;
@@ -1243,8 +1232,6 @@ namespace ARS
                 ? NodesToDoubleRadius(apexNode, detectedRadius, blurMaxStep, count)
                 : blurMaxStep;
 
-            // A corner turns the car: the region's own turn is the test, not how many nodes the radius takes
-            // to double, which is three corners on a hairpin and a third of the arc on a sweeper.
             float regionTurn = 0f;
             for (int position = startPosition; position <= endPosition; position++)
                 regionTurn += ARS.TrackPoints[scanNodes[position]].Angle;
@@ -1293,7 +1280,7 @@ namespace ARS
                 float gapSeconds = gap / Math.Max(referenceSpeed, 1f);
 
                 bool sameBend = gapSeconds < AlignedCornerSeconds && AimsSameWay(previous, corner, AlignedCornerDegrees);
-                // Inside the close window the tighter apex governs whatever the sizes; the gate guards the aligned case.
+
                 bool similarRadii = Math.Abs(corner.DetectedRadius - previous.DetectedRadius) <= SpanMergeRadiusGate;
                 if (gapSeconds < closeCornerSeconds || (similarRadii && sameBend))
                 {
@@ -1391,8 +1378,6 @@ namespace ARS
             survivor.ExitNodes = exitDistance;
         }
 
-        // The widest arc that still stays on the road: tangent to the inside at the apex and the outside where it
-        // enters and leaves, capped by whatever straight there is before it.
         static float WidestArcRadius(int apexNode, int startNode, int endNode, float tightest)
         {
             int count = ARS.TrackPoints.Count;
