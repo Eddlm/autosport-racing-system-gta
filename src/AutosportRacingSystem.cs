@@ -33,7 +33,8 @@ namespace ARS
         ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis,
         ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip,
         ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry,
-        ShowFrontSlip, ShowSlideAngle, ShowThrottleReason, ShowTrLateral, ShowCurveRadius
+        ShowFrontSlip, ShowSlideAngle, ShowThrottleReason, ShowTrLateral, ShowCurveRadius,
+        ShowRouteSpeedOffsets
     }
 
     public partial class ARS : Script
@@ -120,6 +121,7 @@ namespace ARS
         public static bool BrakeLearning = true;
         public static bool BrakeLearningNotify = false;
         public static bool CornerSpeedLearning = true;
+        public static bool RouteSpeedPoints = true;
         public static bool CornerSpeedLearnNotify = true;
         public static bool SlideBrakeCap = true;
         public static float MaxCrestLift = 0.4f;
@@ -190,7 +192,8 @@ namespace ARS
         { Options.ShowGLine, false },
         { Options.ShowRouteRadius, false },
         { Options.ShowTrLateral, false },
-        { Options.ShowCurveRadius, false }
+        { Options.ShowCurveRadius, false },
+        { Options.ShowRouteSpeedOffsets, false }
     };
 
         public const float SpectateCheckpointRadiusMeters = 400f;
@@ -370,7 +373,7 @@ namespace ARS
             UpdateChecker.CheckLatestRelease();
         }
 
-        static string ReadBuildNumber()
+        public static string ReadBuildNumber()
         {
             try
             {
@@ -976,6 +979,14 @@ namespace ARS
             };
             rivalPaceMenu.Add(cornerSpeedLearningItem);
 
+            NativeCheckboxItem routeSpeedPointsItem = new NativeCheckboxItem("Route Speed Points", "Follow a per-node table of speed offsets owned by each AI racer. Phase 1 seeds every 50th node where the swept curve radius is between 150 and 900 m and keeps every offset at 0, so the car drives exactly as it did; the switch only gates the addition. Off leaves the route term untouched.", RouteSpeedPoints);
+            routeSpeedPointsItem.CheckboxChanged += (sender, args) =>
+            {
+                RouteSpeedPoints = routeSpeedPointsItem.Checked;
+                SaveRacerSetting("RouteSpeedPoints", RouteSpeedPoints.ToString());
+            };
+            rivalPaceMenu.Add(routeSpeedPointsItem);
+
             NativeCheckboxItem slideBrakeItem = new NativeCheckboxItem("Slide Brake Cap", "From half the car's peak slip angle at that speed to 1.5x it, the brake eases from full down to a third: a sliding tyre has no grip left to brake with, and pressing harder only upsets it. Off leaves the pedal to the plan alone.", SlideBrakeCap);
             slideBrakeItem.CheckboxChanged += (sender, args) =>
             {
@@ -1310,6 +1321,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw a line from your own car's roof along the horizontal acceleration it pulls, one metre per G, with a cross at the tail. Your car only.");
             AddDebugCheckbox(debugMenu, Options.ShowRouteRadius, "Show Route Radius", "Draw the three nodes the route radius is measured from: the car's own, the near sample and the far one at speed/grip and twice that ahead.");
             AddDebugCheckbox(debugMenu, Options.ShowTrLateral, "Show TRlateral", "The tyre's peak slide angle at this speed, drawn on the focus car: a line per side along the car from the rear to the front tip, and from that tip a line of the same length opening back at the angle (LateralTractionCurveDegrees / (1 + 0.1·v)) — the horn opens wide when the car is slow and closes onto the body line at speed. A second horn per side (red) opens at the car's live slide angle, so the pair shows the tyre's limit (yellow) against where the car actually sits (red).");
+            AddDebugCheckbox(debugMenu, Options.ShowRouteSpeedOffsets, "Show Route Speed Offsets", "Draw the active route-speed point's offset and the next three as text at each point's position. Wrap-aware on circuits; stops at the last point on point-to-point tracks.");
             AddDebugCheckbox(debugMenu, Options.ShowCurveRadius, "Show Curve %", "The focus car's own path radius against the track's radius under it, as a bare percentage in the subtitle: over 100 the car is running wider than the track asks, under 100 it is holding or tightening. The path radius is a 2D circle through the car and its own projections at half a second and one second; the track radius is the sweep radius at the car's node.");
 
             NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Nothing is forced past the level, so Error keeps only errors.", EnumLabels<LogImportance>());
@@ -2184,6 +2196,14 @@ namespace ARS
                         ?? Racers.Where(c => !c.ControlledByPlayer).OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault()
                         ?? PlayerRacer;
                     if (curveRacer != null && CanWeUse(curveRacer.Car)) curveRacer.DrawRouteSpeedSubtitle();
+                }
+
+                if (raceLive && DebugToggles[Options.ShowRouteSpeedOffsets])
+                {
+                    Racer pointRacer = DebugFocusRacer
+                        ?? Racers.Where(c => !c.ControlledByPlayer).OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault()
+                        ?? PlayerRacer;
+                    if (pointRacer != null && CanWeUse(pointRacer.Car)) pointRacer.DrawRouteSpeedPointOffsets();
                 }
 
                 if (raceLive && DebugToggles[Options.ShowRouteRadius])
@@ -3712,6 +3732,7 @@ namespace ARS
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
             CornerSpeedLearning = SettingsMenuStore.GetBool("CornerSpeedLearning", CornerSpeedLearning);
+            RouteSpeedPoints = SettingsMenuStore.GetBool("RouteSpeedPoints", RouteSpeedPoints);
             CornerSpeedLearnNotify = DevelopmentMenuStore.GetBool("CornerSpeedLearnNotify", CornerSpeedLearnNotify);
             SlideBrakeCap = SettingsMenuStore.GetBool("SlideBrakeCap", SlideBrakeCap);
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);

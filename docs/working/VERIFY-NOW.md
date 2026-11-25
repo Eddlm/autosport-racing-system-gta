@@ -1,12 +1,35 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **2050** (`19533741c83c5c5c`). Every section from **AF** up is **compile-only**; **AQ** is the newest, then **AP**, **AO**, **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, **AF**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **2086** (`62daa140e4e6fe6a`). Every section from **AF** up is **compile-only**; **AR** is the newest, then **AQ**, **AP**, **AO**, **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, **AF**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **77 open rows below**; everything already driven or disposed of
+**Section P is closed** (all eighteen verified). **78 open rows below**; everything already driven or disposed of
 sits in **Answered** at the bottom, out of the way, with **81** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
+
+---
+
+## AR · 2026-11-25 (2086) — per-node route speed offsets, wired inert
+
+⬜ Not driven. Compile-only.
+
+The AI's route term now follows a per-racer table of node-keyed speed offsets alongside the existing global
+scalar. Every offset is 0 and the persisted `Route Speed Points` checkbox (on by default) gates only the
+addition, so the speed plan reads exactly the number it read before. Phase 2 is the learner that writes the
+offsets; the old global route learner stays off.
+
+Seeding walks every 50th node, keeping those with `SweepCurveRadius` in [150, 900] m, in track order. One
+predicate picks the active point: the first one the 1 s lookahead has not crossed; the cursor advances while
+crossed, wraps on circuits, stops at the last point on point-to-point tracks. Cleared at race init, rebuilt on
+`ARS.CornersRevision` changes.
+
+A new `Show Route Speed Offsets` debug toggle draws the active point's offset and the next three as text at each
+point's position (wrap-aware on circuits, stops at the last point on point-to-point tracks).
+
+Pass condition: with `Show Curve Radius` on, the subtitle's third line shows an advancing
+`#index / node / radius / +0.0mps`, version-stamped `[ROUTEPOINT]` lines appear on advances and wraps, and
+the car drives exactly as it did — no pedal pulse or speed step at a handover.
 
 ---
 

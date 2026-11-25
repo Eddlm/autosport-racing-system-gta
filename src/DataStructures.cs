@@ -434,6 +434,24 @@ namespace ARS
         public float CornerSpeedOffsetMps = 0f;
         public bool RequiresBraking = false;
     }
+    // One offset per seeded node, owned by each racer; the bound lives here so Phase 2's learner is its only writer.
+    public class RouteSpeedPoint
+    {
+        public const float MaxOffsetMps = 10f;
+
+        public readonly int Node;
+        public readonly float Radius;
+        float _offsetMps;
+
+        public RouteSpeedPoint(int node, float radius)
+        {
+            Node = node;
+            Radius = radius;
+        }
+
+        public float OffsetMps => _offsetMps;
+        public void SetOffsetMps(float value) => _offsetMps = ARS.Clamp(value, -MaxOffsetMps, MaxOffsetMps);
+    }
     public class TrackStartInfo
     {
         public string TrackPath;
