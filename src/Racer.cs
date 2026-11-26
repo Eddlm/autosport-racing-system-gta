@@ -4860,16 +4860,19 @@ const float RequirementLookaheadSeconds = 3.95f;
         }
 
         // The tyre root over-asks on a wide radius: apex physics reads pure below the cap radius, and above it
-        // the speed floors at the cap radius's own apex speed - the drive-approved behaviour the five-knob
-        // taper had already converged to. 999 m stays the open-road code that is never floored.
+        // the speed keeps rising with radius but in dialled steps - the cap radius anchors the pure apex speed
+        // and RouteSpeedRiseExponent is the exponent of the rise (0.5 = the tyre root's own steps, lower =
+        // smaller steps, 0 = flat). 999 m stays the open-road code that never damps.
         const float RouteSpeedCapRadiusM = 100f;
+        const float RouteSpeedRiseExponent = 0.25f;
         const float RouteRadiusOpenM = 999f;
 
         float RouteIdealSpeedForRadius(float r)
         {
             float root = ApexSpeedWithDownforce(r);
             if (r >= RouteRadiusOpenM) return root;
-            return Math.Min(root, ApexSpeedWithDownforce(RouteSpeedCapRadiusM));
+            if (r <= RouteSpeedCapRadiusM) return root;
+            return ApexSpeedWithDownforce(RouteSpeedCapRadiusM) * (float)Math.Pow(r / RouteSpeedCapRadiusM, RouteSpeedRiseExponent);
         }
 
         float RouteSurfaceGrip()
