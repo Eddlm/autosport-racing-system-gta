@@ -3880,7 +3880,8 @@ const float RequirementLookaheadSeconds = 3.95f;
                 }
                 RouteSpeedPoint point = _routeSpeedPoints[index];
                 if (point.Node < 0 || point.Node >= ARS.TrackPoints.Count) continue;
-                string text = "#" + index + " " + point.TargetSpeedMps.ToString("0.0", CultureInfo.InvariantCulture) + "mps";
+                string text = "#" + index + " " + point.TargetSpeedMps.ToString("0.0", CultureInfo.InvariantCulture) + "mps~n~r"
+                    + point.Radius.ToString("0", CultureInfo.InvariantCulture) + "m";
                 ARS.DrawText(ARS.TrackPoints[point.Node].Position + Vector3.WorldUp * 2.5f,
                     text, i == 0 && _activeRouteSpeedPoint != null ? Color.LimeGreen : Color.White, 0.5f);
             }
@@ -4864,7 +4865,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float RouteSpeedTaperCrossoverRadiusM = 400f;
         const float RouteSpeedTaperCrossoverShare = 0.5f;
         const float RouteSpeedTaperTailDecay = 0.45f;
-        const float RouteSpeedTaperStrength = 0.5f;
+        const float RouteSpeedTaperStrength = 0.7f;
         const float RouteRadiusOpenM = 999f;
 
         float RouteIdealSpeedForRadius(float r)
