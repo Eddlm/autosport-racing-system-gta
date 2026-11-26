@@ -226,6 +226,45 @@ sign the plan has already lost the corner rather than a reason to bury the pedal
 and not to the car, so the instant the corner ramp takes over the pedal is free again — standing on the brakes
 is exactly what a ramp is for, and nothing else is.
 
+## Route Speed Points — the per-section speed
+
+**The point of the system is anticipation done honestly: the speed the car should be carrying, stated for the
+ground ahead of it, with the physics on record instead of hidden inside a limiter.** With the `Route Speed
+Points` switch on, the route term is no longer the physics base plus a scalar offset: it *is* a chain of
+per-section targets. Every 40th node seeds unconditionally — no radius gate, so all track is covered — and each
+baked target carries three layers: the apex-speed root `√(grip·g·r)` from the **tightest swept radius within
+half the seed spacing** (the worst nearby ground; the downhill bake uses the same worst-nearby lookup), the
+**rise exponent** above the 100 m cap radius, and the **downhill damping**. Nothing prunes except a detected
+corner apex within reach — corner ground is handed to the corner system, everything else is the route's.
+
+Why the exponent exists: the tyre root says speed grows with the square root of radius, and on wide sweepers
+that over-asks — the car cannot chase `√r` into a bend it slides out of. `RouteSpeedRiseExponent` dials the
+ratio of radius to speed rise: 0.5 is the tyre root's own steps, 0 is flat, and the drive settled at 0.125 —
+200 m rides at 108 mph and 990 m at 132 where physics offers 140 and 312 (grip 2 g anchor). The 100 m cap
+radius anchors the pure physics below it; the number is the knob and every floor value moves with it.
+
+Why the downhill is baked and the crest is not: a descent feeds the car gravitational energy exactly where the
+route asks it to turn, and a radius cannot see a hill. The bake scans the same ±half-spacing window, takes the
+**steepest descent in the direction of travel**, and damps through the same hill law the old term carried —
+`√factor`, halving every 15°, floored at −29%. Uphill never raises the target, and the crest is kept out on
+purpose: a crest takes grip a moment late, which is a timing problem, and belongs to the term that sees the
+car's position live.
+
+The timing is a two-horizon handover. A point is **trusted only once inside the car's 2 s horizon** — a farther
+point's curve-baked speed would cap the straight — and it **holds until the next point fits that horizon or the
+car reaches its node**. The first design lifted the point one second early; that made every point's authority a
+single second wide and kept the chain re-syncing above `spacing/(trust−hold)`. Holding to the node tiles the
+chain seamlessly from spacing/2 — 20 m/s at spacing 40 — and below it the leftover gap is exactly what the
+horizon cannot reach, an honest hole rather than a hidden one. The respected speed rides the pedal gauges'
+smoother toward each target, so section switches taper instead of stepping, and the apex handover ramp chases
+the smoothed value.
+
+Off, the switch decouples the whole system: the old term — its physics base, its offset row and its
+surface/slope/crest scaling — runs untouched, and a tick without a trusted point falls back to it, so the car
+never stands down to zero. `[ROUTESEED]` and `[ROUTEPOINT]` log the density and the handover, and the speedpoint
+debug text names each point's target beside the radius the law actually took, so sentinel ground reads `r999`
+on sight.
+
 ## The lane law
 
 **Goal:** put the car on the lane it was told to be on — as directly as the geometry allows and no
@@ -698,7 +737,7 @@ learner at all.
 ## What this file does not cover yet
 
 The damper's law, the slide blend and its countersteer, the steer limiter's ceiling and the brake side's own
-caps, the recovery state machine and the route law's own choice of radius all have design intent worth
+caps, and the recovery state machine all have design intent worth
 writing down — they live in `AGENTS/AGENTS-STEERING.md` and `AGENTS/AGENTS-TECHNOTES.md` today only as live description.
 Naming them here is deliberate: this file is expected to grow, one system at a time, and nothing in it
 should be read as a claim about a part that is not written up yet.
