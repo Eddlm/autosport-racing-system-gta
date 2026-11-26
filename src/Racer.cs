@@ -546,36 +546,42 @@ namespace ARS
         RouteSpeedPoint ActiveRouteSpeedPoint()
         {
             if (_routeSpeedPoints.Count == 0) return null;
-            if (!LookAheads.TryGetValue(LookAhead.OneSec, out TrackPoint lookahead) || lookahead == null) return null;
             if (!LookAheads.TryGetValue(LookAhead.TwoSec, out TrackPoint twoSecLook) || twoSecLook == null) return null;
-            int fwdLook = ForwardNodeDistance(lookahead.Node);
             int twoSecFwd = ForwardNodeDistance(twoSecLook.Node);
             int nodeCount = ARS.TrackPoints.Count;
             if (_routeSpeedCursor < 0) _routeSpeedCursor = 0;
             int startCursor = _routeSpeedCursor;
             for (int steps = 0; steps < _routeSpeedPoints.Count; steps++)
             {
-                // Fold the wrap back: a point behind the lookahead reads a lap ahead and never wraps.
-                int ahead = ForwardNodeDistance(_routeSpeedPoints[_routeSpeedCursor].Node) - fwdLook;
-                if (!ARS.IsPointToPoint)
+                // Signed car-to-point distance: a just-passed point folds to a small negative on circuits,
+                // and on point-to-point the raw subtraction already reads negative.
+                int ahead = ForwardNodeDistance(_routeSpeedPoints[_routeSpeedCursor].Node);
+                if (!ARS.IsPointToPoint && ahead > nodeCount / 2) ahead -= nodeCount;
+                if (ahead < 0)
                 {
-                    if (ahead > nodeCount / 2) ahead -= nodeCount;
-                    else if (ahead < -nodeCount / 2) ahead += nodeCount;
+                    if (_routeSpeedCursor + 1 < _routeSpeedPoints.Count) _routeSpeedCursor++;
+                    else if (ARS.IsPointToPoint) break;
+                    else _routeSpeedCursor = 0;
+                    continue;
                 }
-                if (ahead >= 0) break;
-                if (_routeSpeedCursor + 1 < _routeSpeedPoints.Count) _routeSpeedCursor++;
-                else if (ARS.IsPointToPoint) break;
-                else _routeSpeedCursor = 0;
+                // The next point takes over the moment it fits the 2 s horizon; only when the horizon cannot
+                // reach it yet does the current point hold to its own node - the old 1 s lift is gone.
+                int nextCursor = _routeSpeedCursor + 1 < _routeSpeedPoints.Count
+                    ? _routeSpeedCursor + 1
+                    : (ARS.IsPointToPoint ? -1 : 0);
+                if (nextCursor < 0) break;
+                int nextAhead = ForwardNodeDistance(_routeSpeedPoints[nextCursor].Node);
+                if (!ARS.IsPointToPoint && nextAhead > nodeCount / 2) nextAhead -= nodeCount;
+                if (nextAhead < 0 || nextAhead <= twoSecFwd)
+                {
+                    _routeSpeedCursor = nextCursor;
+                    continue;
+                }
+                break;
             }
             RouteSpeedPoint selected = _routeSpeedPoints[_routeSpeedCursor];
-            int toPoint = ForwardNodeDistance(selected.Node) - fwdLook;
-            if (!ARS.IsPointToPoint)
-            {
-                if (toPoint > nodeCount / 2) toPoint -= nodeCount;
-                else if (toPoint < -nodeCount / 2) toPoint += nodeCount;
-            }
-            toPoint += fwdLook;
-            // The advance line fires when the cursor moves, trusted or not: the gate must not swallow it.
+            int toPoint = ForwardNodeDistance(selected.Node);
+            if (!ARS.IsPointToPoint && toPoint > nodeCount / 2) toPoint -= nodeCount;
             if (_routeSpeedCursor != startCursor) LogRouteSpeedPointAdvance(startCursor, selected);
             // Trusted only within the car's 2 s horizon: a farther point's curve-baked speed would cap the straight.
             if (toPoint < 0 || toPoint > twoSecFwd)

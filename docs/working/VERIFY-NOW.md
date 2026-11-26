@@ -41,7 +41,10 @@ radius lookup uses, travelled forward, damps the target through the same hill la
 The prune logs one `[ROUTESEED]` line (seeded → kept) per racer per route revision, so the density is visible in
 ARS.log. The respected speed is smoothed: it rides a SmoothFloat at rate 6/s (the pedal gauges'
 law) toward the section target, so point switches taper instead of stepping; first service snaps
-and the apex handover ramp chases the smoothed value. While the switch is on the old
+and the apex handover ramp chases the smoothed value. The handover drops the old 1 s lift (2103):
+a point holds until the next fits the 2 s horizon or the car reaches its node — the chain tiles seamlessly
+from spacing/2 (20 m/s at spacing 40) and below that the leftover gap is just what the horizon cannot reach.
+While the switch is on the old
 route speed system (its physics base, its scalar offset row and the surface/slope/crest scaling it carried) is
 decoupled; a tick with no active point falls back to the old base, so the car never stands down to 0. Off is the
 old term, untouched.
