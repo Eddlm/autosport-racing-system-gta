@@ -546,8 +546,8 @@ namespace ARS
         RouteSpeedPoint ActiveRouteSpeedPoint()
         {
             if (_routeSpeedPoints.Count == 0) return null;
-            if (!LookAheads.TryGetValue(LookAhead.TwoSec, out TrackPoint twoSecLook) || twoSecLook == null) return null;
-            int twoSecFwd = ForwardNodeDistance(twoSecLook.Node);
+            if (!LookAheads.TryGetValue(LookAhead.OneSec, out TrackPoint oneSecLook) || oneSecLook == null) return null;
+            int oneSecFwd = ForwardNodeDistance(oneSecLook.Node);
             int nodeCount = ARS.TrackPoints.Count;
             if (_routeSpeedCursor < 0) _routeSpeedCursor = 0;
             int startCursor = _routeSpeedCursor;
@@ -564,15 +564,15 @@ namespace ARS
                     else _routeSpeedCursor = 0;
                     continue;
                 }
-                // The next point takes over the moment it fits the 2 s horizon; only when the horizon cannot
-                // reach it yet does the current point hold to its own node - the old 1 s lift is gone.
+                // The next point takes over the moment it fits the 1 s horizon; only when the horizon cannot
+                // reach it yet does the current point hold to its own node.
                 int nextCursor = _routeSpeedCursor + 1 < _routeSpeedPoints.Count
                     ? _routeSpeedCursor + 1
                     : (ARS.IsPointToPoint ? -1 : 0);
                 if (nextCursor < 0) break;
                 int nextAhead = ForwardNodeDistance(_routeSpeedPoints[nextCursor].Node);
                 if (!ARS.IsPointToPoint && nextAhead > nodeCount / 2) nextAhead -= nodeCount;
-                if (nextAhead < 0 || nextAhead <= twoSecFwd)
+                if (nextAhead < 0 || nextAhead <= oneSecFwd)
                 {
                     _routeSpeedCursor = nextCursor;
                     continue;
@@ -583,8 +583,8 @@ namespace ARS
             int toPoint = ForwardNodeDistance(selected.Node);
             if (!ARS.IsPointToPoint && toPoint > nodeCount / 2) toPoint -= nodeCount;
             if (_routeSpeedCursor != startCursor) LogRouteSpeedPointAdvance(startCursor, selected);
-            // Trusted only within the car's 2 s horizon: a farther point's curve-baked speed would cap the straight.
-            if (toPoint < 0 || toPoint > twoSecFwd)
+            // Trusted only within the car's 1 s horizon: a farther point's curve-baked speed would cap the straight.
+            if (toPoint < 0 || toPoint > oneSecFwd)
             {
                 _activeRouteSpeedPoint = null;
                 return null;
