@@ -2020,7 +2020,9 @@ const float RequirementLookaheadSeconds = 3.95f;
         // The UI follower's exponential rate per second: 95% after about half a second.
         const float ThrottleSmoothRate = 6f;
         const float BrakeSmoothRate = 6f;
-        const float RouteSmoothRate = 6f;
+        // The route speed chases at half the gauges' rate: section switches take about a second, and the
+        // target chain's 2 s anticipation carries the lag.
+        const float RouteSmoothRate = 3f;
         const float TcsSmoothRate = 6f;
         const float StabSmoothRate = 6f;
 
