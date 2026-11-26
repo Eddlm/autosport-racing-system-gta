@@ -4864,7 +4864,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         // and RouteSpeedRiseExponent is the exponent of the rise (0.5 = the tyre root's own steps, lower =
         // smaller steps, 0 = flat). 999 m stays the open-road code that never damps.
         const float RouteSpeedCapRadiusM = 100f;
-        const float RouteSpeedRiseExponent = 0.25f;
+        const float RouteSpeedRiseExponent = 0.125f;
         const float RouteRadiusOpenM = 999f;
 
         float RouteIdealSpeedForRadius(float r)
