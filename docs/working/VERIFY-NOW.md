@@ -19,8 +19,8 @@ slows down appropriately» — seeded targets and the 2 s trust both read in the
 
 Behind the same persisted `Route Speed Points` checkbox — default OFF as shipped in 2087 (static default, `KeySpec`
 seed and stored ini line all False, so the A/B was a menu flip; you flipped it back ON to test) — the route term is
-no longer the physics base plus an offset: it IS the per-section speed. Each seeded point (every 50th node) takes
-the **tightest swept radius within half the seed spacing on each side** (25 nodes each way at spacing 50 — adjacent
+no longer the physics base plus an offset: it IS the per-section speed. Each seeded point (every 40th node) takes
+the **tightest swept radius within half the seed spacing on each side** (20 nodes each way at spacing 40 — adjacent
 points' windows tile the route wherever points survive; pruned ground near corner apexes falls back to the old
 base) as its own `Radius` — your overshoot law, sharpened in
 2088→2089: seed points were leapfrogging the tight stretches between them because each trusted only its own node,
@@ -33,7 +33,7 @@ bounded 0 to the intended-speed ceiling. The seeding is
 **generate-then-prune** (your restructure, 2090): every candidate seeds unconditionally — deep straights carry the
 999 no-bend sentinel and clamp to the ceiling (the old [150, 900] band ate 22 of 39 LSIA candidates and left a
 ~1.3 km straight dead zone, measured by replicating the pass on LSIA Test Track) — then a prune pass removes
-points with a **detected corner apex within the sweep's own reach plus one node (±26 at spacing 50)** — your rule,
+points with a **detected corner apex within the sweep's own reach plus one node (±21 at spacing 40)** — your rule,
 confined from the first whole-spacing shape: a point near a corner hands that ground to the corner system. Each
 baked target also carries the **downhill only**: the most inclined trackpoint in the same ±half-spacing window the
 radius lookup uses, travelled forward, damps the target through the same hill law the old route term carries

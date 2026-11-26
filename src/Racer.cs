@@ -365,7 +365,7 @@ namespace ARS
         const float BrakeHorizonMarginMetres = 40f;
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
-        const int RouteSpeedPointSpacingNodes = 50;
+        const int RouteSpeedPointSpacingNodes = 40;
         readonly List<RouteSpeedPoint> _routeSpeedPoints = new List<RouteSpeedPoint>();
         int _routeSpeedCursor = -1;
         int _routeSpeedRevisionSeeded = -1;
