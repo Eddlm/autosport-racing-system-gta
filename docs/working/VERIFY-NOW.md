@@ -41,9 +41,10 @@ radius lookup uses, travelled forward, damps the target through the same hill la
 The prune logs one `[ROUTESEED]` line (seeded → kept) per racer per route revision, so the density is visible in
 ARS.log. The respected speed is smoothed: it rides a SmoothFloat at rate 6/s (the pedal gauges'
 law) toward the section target, so point switches taper instead of stepping; first service snaps
-and the apex handover ramp chases the smoothed value. The handover drops the old 1 s lift (2103):
-a point holds until the next fits the 2 s horizon or the car reaches its node — the chain tiles seamlessly
-from spacing/2 (20 m/s at spacing 40) and below that the leftover gap is just what the horizon cannot reach.
+and the apex handover ramp chases the smoothed value. The handover drops the old 1 s lift (2103); trust and
+pickup retimed 2 s → 1 s (build 2105, your call — the car reached for future nodes too eagerly at 2 s):
+a point holds until the next fits the 1 s horizon or the car reaches its node — the chain tiles seamlessly
+from spacing (40 m/s at spacing 40) and below that the leftover gap is just what the horizon cannot reach.
 While the switch is on the old
 route speed system (its physics base, its scalar offset row and the surface/slope/crest scaling it carried) is
 decoupled; a tick with no active point falls back to the old base, so the car never stands down to 0. Off is the
@@ -52,7 +53,7 @@ old term, untouched.
 Readouts: the four world labels and the subtitle's third line print the point's target speed in m/s (the advance
 log prints `tgt` where it printed `off`); the subtitle's `r` now reads the window's tightest radius. The cursor
 still keys to `LookAheads[LookAhead.OneSec]` per your ruling; on top of it a point is **trusted only inside the
-car's 2 s horizon** (your rule, 2090): the selected point must sit within [0, the `LookAhead.TwoSec` distance —
+car's 1 s horizon** (your rule, 2090, retimed 2 s → 1 s in build 2105): the selected point must sit within [0, the `LookAhead.OneSec` distance —
 rebuilt each tick from the car's speed] and not behind it; outside, or when a passed point is stuck on a
 point-to-point tail, `ActiveRouteSpeedPoint` returns null and the old base owns the term. That ends the
 straight-cap defect — a point whose radius bakes a curve's begin can no longer cap a straight seconds early, and
@@ -62,7 +63,7 @@ comparing against `VehicleData.SpeedVectorLocal.Y`, no single mph call inside it
 menu rows', made once.
 
 Pass condition: switch on — the car holds the seeded speeds through the tight stretches between seed nodes too (no
-more leapfrog overshoot), straights seed and let the ceiling speak for them, curve approaches cap in only ~2 s
+more leapfrog overshoot), straights seed and let the ceiling speak for them, curve approaches cap in only ~1 s
 before the trusted point (the subtitle reads `route points: none` until then), the labels show real speeds, and
 the subtitle's third line shows `n/x r/tgt` advancing; switch off — today's baseline returns unchanged;
 `[ROUTEPOINT]` lines keep firing on advances, now as `tgt`, and `[ROUTESEED]` names the table size per revision.

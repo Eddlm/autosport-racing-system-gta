@@ -250,12 +250,13 @@ route asks it to turn, and a radius cannot see a hill. The bake scans the same �
 purpose: a crest takes grip a moment late, which is a timing problem, and belongs to the term that sees the
 car's position live.
 
-The timing is a two-horizon handover. A point is **trusted only once inside the car's 2 s horizon** — a farther
+The timing is a two-horizon handover. A point is **trusted only once inside the car's 1 s horizon** — a farther
 point's curve-baked speed would cap the straight — and it **holds until the next point fits that horizon or the
-car reaches its node**. The first design lifted the point one second early; that made every point's authority a
-single second wide and kept the chain re-syncing above `spacing/(trust−hold)`. Holding to the node tiles the
-chain seamlessly from spacing/2 — 20 m/s at spacing 40 — and below it the leftover gap is exactly what the
-horizon cannot reach, an honest hole rather than a hidden one. The respected speed rides the pedal gauges'
+car reaches its node**. Holding to the node tiles the chain seamlessly from the spacing itself — 40 m/s at
+spacing 40 — and below it the leftover gap is exactly what the horizon cannot reach, an honest hole rather than
+a hidden one. (History: 2103 ran the trust at 2 s, seamless from spacing/2 — 20 m/s — after an earlier design
+lifted each point one second early; the 2 s horizon reached for future nodes too eagerly, and 2105 retimed
+trust and pickup to 1 s together.) The respected speed rides the pedal gauges'
 smoother toward each target, so section switches taper instead of stepping, and the apex handover ramp chases
 the smoothed value.
 
