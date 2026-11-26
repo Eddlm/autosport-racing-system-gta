@@ -45,6 +45,8 @@ and the apex handover ramp chases the smoothed value. The handover drops the old
 pickup retimed 2 s → 1 s (build 2105, your call — the car reached for future nodes too eagerly at 2 s):
 a point holds until the next fits the 1 s horizon or the car reaches its node — the chain tiles seamlessly
 from spacing (40 m/s at spacing 40) and below that the leftover gap is just what the horizon cannot reach.
+The dead TwoSec producer went with it (build 2106): the named member, its metres line and its dictionary
+entry are all gone — nothing has read `LookAhead.TwoSec` since the trust joined OneSec.
 While the switch is on the old
 route speed system (its physics base, its scalar offset row and the surface/slope/crest scaling it carried) is
 decoupled; a tick with no active point falls back to the old base, so the car never stands down to 0. Off is the
