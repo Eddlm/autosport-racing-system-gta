@@ -34,8 +34,11 @@ bounded 0 to the intended-speed ceiling. The seeding is
 999 no-bend sentinel and clamp to the ceiling (the old [150, 900] band ate 22 of 39 LSIA candidates and left a
 ~1.3 km straight dead zone, measured by replicating the pass on LSIA Test Track) — then a prune pass removes
 points with a **detected corner apex within the sweep's own reach plus one node (±26 at spacing 50)** — your rule,
-confined from the first whole-spacing shape: a point near a corner hands that ground to the corner system. The
-prune logs one `[ROUTESEED]` line (seeded → kept) per racer per route revision, so the density is visible in
+confined from the first whole-spacing shape: a point near a corner hands that ground to the corner system. Each
+baked target also carries the **downhill only**: the most inclined trackpoint in the same ±half-spacing window the
+radius lookup uses, travelled forward, damps the target through the same hill law the old route term carries
+(√factor, the law the pitch menus tune); uphill never raises the target and crest stays out (your call, 2101).
+The prune logs one `[ROUTESEED]` line (seeded → kept) per racer per route revision, so the density is visible in
 ARS.log. The respected speed is smoothed: it rides a SmoothFloat at rate 6/s (the pedal gauges'
 law) toward the section target, so point switches taper instead of stepping; first service snaps
 and the apex handover ramp chases the smoothed value. While the switch is on the old

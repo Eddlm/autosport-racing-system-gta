@@ -467,7 +467,7 @@ namespace ARS
             {
                 // Generate every candidate unconditionally; the prune passes own what dies.
                 RouteSpeedPoint entry = new RouteSpeedPoint(ARS.TrackPoints[node].Node, TightestSweepRadiusNear(node, ARS.TrackPoints.Count));
-                entry.SetTargetSpeedMps(RouteIdealSpeedForRadius(entry.Radius));
+                entry.SetTargetSpeedMps(RouteIdealSpeedForRadius(entry.Radius) * NearbyDownhillSpeedFactor(node, ARS.TrackPoints.Count));
                 _routeSpeedPoints.Add(entry);
             }
             PruneRouteSpeedPoints();
@@ -496,6 +496,25 @@ namespace ARS
                 if (radius < tightest) tightest = radius;
             }
             return tightest;
+        }
+
+        // The point bakes the worst of what is nearby, mirroring the radius lookup's window: the most inclined
+        // trackpoint each way of the node, travelled forward, damped by the same hill law the old route term
+        // carries. Downhill only - uphill never raises the target, and crest stays out.
+        float NearbyDownhillSpeedFactor(int node, int count)
+        {
+            int half = RouteSpeedPointSpacingNodes / 2;
+            float steepestDescent = 0f;
+            for (int offset = -half; offset <= half; offset++)
+            {
+                int sample = ARS.IsPointToPoint ? (int)ARS.Clamp(node + offset, 0, count - 1)
+                    : ((node + offset) % count + count) % count;
+                float descent = -ARS.TrackPoints[sample].SlopeSineTimes90 * ElevationToSlopeSine;
+                if (descent > steepestDescent) steepestDescent = descent;
+            }
+            if (steepestDescent <= 0f) return 1f;
+            float pitchDeg = ARS.RadToDeg((float)Math.Asin(ARS.Clamp(steepestDescent, 0f, 1f)));
+            return (float)Math.Sqrt(ARS.HillGripFactorFromPitchAngle(pitchDeg, this));
         }
 
         // The prohibition is the sweep's own reach plus one: half the seed spacing back and forth, +1, around the apex.
