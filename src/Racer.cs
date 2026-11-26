@@ -91,7 +91,7 @@ namespace ARS
         public int LiveSlidRadiusFarNode = -1;
         public float LiveSlidRadius = -1f;
         public float LiveRouteRadius = -1f;
-        public enum LookAhead { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec };
+        public enum LookAhead { SteerRef, OneSec };
         public Dictionary<LookAhead, TrackPoint> LookAheads = new Dictionary<LookAhead, TrackPoint>();
 
         public List<TimeSpan> LapTimes = new List<TimeSpan>();
@@ -4368,11 +4368,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             AlongTrackSpeed = Vector3.Dot(velocity, CurrentTrackPoint.Direction);
 
             int steerRef = (int)SteerLookaheadNodes(speed);
-            int quarterSec = (int)(speed * 0.25f);
-            int halfSec = (int)(speed * 0.5f);
-            int threeQuarterSec = (int)(speed * 0.75f);
             int oneSec = (int)(speed);
-            int oneHalfSec = (int)(speed * 1.5f);
 
             TrackPoint ResolveLookAhead(int offset)
             {
@@ -4382,11 +4378,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
             LookAheads[LookAhead.SteerRef] = ResolveLookAhead(steerRef);
-            LookAheads[LookAhead.QuarterSec] = ResolveLookAhead(quarterSec);
-            LookAheads[LookAhead.HalfSec] = ResolveLookAhead(halfSec);
-            LookAheads[LookAhead.ThreeQuarterSec] = ResolveLookAhead(threeQuarterSec);
             LookAheads[LookAhead.OneSec] = ResolveLookAhead(oneSec);
-            LookAheads[LookAhead.OneHalfSec] = ResolveLookAhead(oneHalfSec);
 
             int nodeCount = ARS.TrackPoints.Count;
             int currentNode = CurrentTrackPoint.Node;

@@ -263,11 +263,11 @@ the smoothed value.
 The horizon readings come out of Racer's shared `LookAheads` table, and the table is deliberately generic. A
 lookahead is only a horizon in seconds of travel: metres at the current speed (`v·t`), resolved against the
 node chain each tick, wrap-aware, one walk per entry — so any horizon can be minted on the fly for a one-off
-read, and the arithmetic is cheap. What the named members (SteerRef, QuarterSec … OneHalfSec) buy is
-repetition: readers that want the same horizon every tick, or side by side, share a single resolution per
-tick instead of re-walking the chain. The set is exactly the horizons with readers — TwoSec left it in 2106
-when the speedpoint trust joined OneSec — and a horizon read again and again earns a name; a one-off stays
-minted.
+read, and the arithmetic is cheap. What the named members (SteerRef, OneSec) buy is repetition: readers that
+want the same horizon every tick, or side by side, share a single resolution per tick instead of re-walking
+the chain. The set is exactly the horizons with readers — TwoSec left it in 2106 when the speedpoint trust
+joined OneSec, and in 2107 the four unread members (QuarterSec, HalfSec, ThreeQuarterSec, OneHalfSec) went the
+same way — and a horizon read again and again earns a name; a one-off stays minted.
 
 Off, the switch decouples the whole system: the old term — its physics base, its offset row and its
 surface/slope/crest scaling — runs untouched, and a tick without a trusted point falls back to it, so the car
