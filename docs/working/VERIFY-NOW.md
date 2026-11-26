@@ -25,8 +25,9 @@ points' windows tile the route wherever points survive; pruned ground near corne
 base) as its own `Radius` — your overshoot law, sharpened in
 2088→2089: seed points were leapfrogging the tight stretches between them because each trusted only its own node,
 and a first 25-node-total window still left the middle of every gap unseen — and stores `TargetSpeedMps` from
-`RouteIdealSpeedForRadius(point.Radius)` — the route's own ideal-speed law, apex speed with downforce tapered by
-the road — written once per route revision, bounded 0 to the intended-speed ceiling. The seeding is
+`RouteIdealSpeedForRadius(point.Radius)` — the route's own ideal-speed law: apex speed with downforce, floored at
+the cap radius's apex speed above `RouteSpeedCapRadiusM` 100 m (the five-knob taper collapsed into this floor in
+2098; its trim had already converged here exactly) — written once per route revision, bounded 0 to the intended-speed ceiling. The seeding is
 **generate-then-prune** (your restructure, 2090): every candidate seeds unconditionally — deep straights carry the
 999 no-bend sentinel and clamp to the ceiling (the old [150, 900] band ate 22 of 39 LSIA candidates and left a
 ~1.3 km straight dead zone, measured by replicating the pass on LSIA Test Track) — then a prune pass removes

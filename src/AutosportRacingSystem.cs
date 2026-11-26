@@ -979,7 +979,7 @@ namespace ARS
             };
             rivalPaceMenu.Add(cornerSpeedLearningItem);
 
-            NativeCheckboxItem routeSpeedPointsItem = new NativeCheckboxItem("Route Speed Points", "On: the route term is a per-section target speed - every 50th node carries one absolute speed, read from the route's own ideal-speed law (apex speed with downforce, tapered by the tightest swept radius in its section), bounded 0 to the intended-speed ceiling; points near a corner apex are pruned and a tick with no point inside the car's 2 s horizon falls back to the old term. Off: the old route term, untouched.", RouteSpeedPoints);
+            NativeCheckboxItem routeSpeedPointsItem = new NativeCheckboxItem("Route Speed Points", "On: the route term is a per-section target speed - every 50th node carries one absolute speed, read from the route's own ideal-speed law (apex speed with downforce, floored at the cap radius's apex speed), bounded 0 to the intended-speed ceiling; points near a corner apex are pruned and a tick with no point inside the car's 2 s horizon falls back to the old term. Off: the old route term, untouched.", RouteSpeedPoints);
             routeSpeedPointsItem.CheckboxChanged += (sender, args) =>
             {
                 RouteSpeedPoints = routeSpeedPointsItem.Checked;

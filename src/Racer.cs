@@ -4859,31 +4859,17 @@ const float RequirementLookaheadSeconds = 3.95f;
             return sum / samples * ElevationToSlopeSine;
         }
 
-        // The tyre root over-asks on a wide radius: no trim below the knee, the dialled line to the crossover,
-        // a power-law tail after it, and 999 m the open-road code that is never trimmed.
-        const float RouteSpeedTaperKneeRadiusM = 100f;
-        const float RouteSpeedTaperCrossoverRadiusM = 400f;
-        const float RouteSpeedTaperCrossoverShare = 0.5f;
-        const float RouteSpeedTaperTailDecay = 0.45f;
-        const float RouteSpeedTaperStrength = 1.0f;
+        // The tyre root over-asks on a wide radius: apex physics reads pure below the cap radius, and above it
+        // the speed floors at the cap radius's own apex speed - the drive-approved behaviour the five-knob
+        // taper had already converged to. 999 m stays the open-road code that is never floored.
+        const float RouteSpeedCapRadiusM = 100f;
         const float RouteRadiusOpenM = 999f;
 
         float RouteIdealSpeedForRadius(float r)
         {
             float root = ApexSpeedWithDownforce(r);
             if (r >= RouteRadiusOpenM) return root;
-            float baseTrim;
-            if (r <= RouteSpeedTaperCrossoverRadiusM)
-            {
-                float span = RouteSpeedTaperCrossoverRadiusM - RouteSpeedTaperKneeRadiusM;
-                baseTrim = 1f - (1f - RouteSpeedTaperCrossoverShare) * (r - RouteSpeedTaperKneeRadiusM) / span;
-            }
-            else
-            {
-                baseTrim = RouteSpeedTaperCrossoverShare * (float)Math.Pow(RouteSpeedTaperCrossoverRadiusM / r, RouteSpeedTaperTailDecay);
-            }
-            float trim = 1f - RouteSpeedTaperStrength * (1f - baseTrim);
-            return root * ARS.Clamp(trim, 0f, 1f);
+            return Math.Min(root, ApexSpeedWithDownforce(RouteSpeedCapRadiusM));
         }
 
         float RouteSurfaceGrip()
