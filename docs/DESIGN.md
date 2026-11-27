@@ -203,8 +203,8 @@ step of zero in either direction, which is what the deleted one-second `ApexRamp
 `SpeedTerm.CornerToRoute` label used to buy. The corner state outlives the speed on purpose: two seconds past the
 apex (`CornerVerdictMs`) the verdict window closes and the corner's verdict commits. The flat hold it replaced —
 `CornerModePostApexHoldMs`, the three quarters of a second of build 1969 — released the route in one step; fifteen
-metres was the earlier rule, and it bunched the release on fast sweepers. With Route Speed Points off there is no
-smoother to seed, and the release is a plain step onto the curvature term.
+metres was the earlier rule, and it bunched the release on fast sweepers. The smoother is always running now — it
+carries the route term itself — so the apex seed always has something to seed.
 
 **The road's own shape corrects both terms.** A hill takes grip from both — the route term at the follow
 point, the corner at its apex inside its braking map, where its grade enters as a deceleration change rather
@@ -229,22 +229,22 @@ sign the plan has already lost the corner rather than a reason to bury the pedal
 and not to the car, so the instant the corner ramp takes over the pedal is free again — standing on the brakes
 is exactly what a ramp is for, and nothing else is.
 
-## Route Speed Points — the per-section speed
+## Route speed — the lookahead window
 
-**The point of the system is anticipation done honestly: the speed the car should be carrying, stated for the
-ground ahead of it, with the physics on record instead of hidden inside a limiter.** With the `Route Speed
-Points` switch on, the route term is no longer the physics base plus a scalar offset: it *is* a chain of
-per-section targets. Every 40th node seeds a lattice — no radius gate, so all track is covered — and each apex then
-pulls its two nearest lattice points onto the cadence either side of itself (`apex ± 40`), so every corner is
-flanked identically whatever phase the lattice landed on; without that, the first exit point sat anywhere from 0 to
-39 nodes past an apex and each corner released differently. Each
-baked target carries three layers: the apex-speed root `√(grip·g·r)` from the **tightest swept radius within
-half the seed spacing** (the worst nearby ground; the downhill bake uses the same worst-nearby lookup), the
-**rise exponent** above the 100 m cap radius, and the **downhill damping**. Nothing prunes any more: every seed
-survives, and the apex is a boundary the sweep may not cross instead — a point past a corner reads only ahead of
-itself, one before it only behind, exactly the window the apex would otherwise eat (`ApexWindowClamp`). A point
-boxed between two apexes keeps its own node alone. Corner ground is therefore still the corner's, but the road a
-point stands on always keeps a number, where the old ±21-node prune deleted the point and left that road bare.
+**The route term is a measurement of the road ahead, taken fresh every tick, not a table about it.** The car slides a
+window forward with itself: the tightest `SweepCurveRadius` between it and the window's far end wins — the lowest
+speed wins, because `RouteIdealSpeedForRadius` is monotone in radius — and that one radius, through the law and the
+surface grip, becomes `followTrackSpd`. Two windows are sampled and the tighter wins: the anchored one ending
+`RouteRadiusFarEndSeconds` ahead, and one slid by `Slid Radius Lead` — the same one-second span, moved along the road,
+so 1.0 s sits at the car and 2.0 s looks a second ahead. The span is a second of travel; the end is `v · endSeconds`, so the horizon is in time, not in metres.
+
+**Why no table (build 2119, his call).** The per-section chain that came before it — builds 2087-2118, every 40th
+node carrying one baked speed — was right in law and wrong in phase: a corner's exit number depended on where the
+seed lattice happened to fall, and every fix moved the artefact instead of removing it (a prune, then an apex
+boundary clamp, then flanks pulled to half the cadence). Each one shifted the hole somewhere else. A sliding window
+has no lattice, so it has no phase and no hole: the number is always about the road in front of the car. What it
+gives up is the fixed per-section value — the plan moves every tick now, which is why the respected speed rides the
+smoother rather than stepping between sections.
 
 Why the exponent exists: the tyre root says speed grows with the square root of radius, and on wide sweepers
 that over-asks — the car cannot chase `√r` into a bend it slides out of. `RouteSpeedRiseExponent` dials the
@@ -253,22 +253,20 @@ ratio of radius to speed rise: 0.5 is the tyre root's own steps, 0 is flat, and 
 radius anchors the pure physics below it; the number is the knob and every floor value moves with it.
 
 Why the downhill is baked and the crest is not: a descent feeds the car gravitational energy exactly where the
-route asks it to turn, and a radius cannot see a hill. The bake scans the same ±half-spacing window — clamped by the
-same apex boundary — takes the
+route asks it to turn, and a radius cannot see a hill. The bake scans the same window the radius does, takes the
 **steepest descent in the direction of travel**, and damps through the same hill law the old term carried —
 `√factor`, halving every 15°, floored at −29%. Uphill never raises the target, and the crest is kept out on
 purpose: a crest takes grip a moment late, which is a timing problem, and belongs to the term that sees the
 car's position live.
 
-The timing is a two-horizon handover. A point is **trusted only once inside the car's 1 s horizon** — a farther
-point's curve-baked speed would cap the straight — and it **holds until the next point fits that horizon or the
-car reaches its node**. Holding to the node tiles the chain seamlessly from the spacing itself — 40 m/s at
-spacing 40 — and below it the leftover gap is exactly what the horizon cannot reach, an honest hole rather than
-a hidden one. (History: 2103 ran the trust at 2 s, seamless from spacing/2 — 20 m/s — after an earlier design
-lifted each point one second early; the 2 s horizon reached for future nodes too eagerly, and 2105 retimed
-trust and pickup to 1 s together.) The respected speed rides the pedal gauges'
-smoother toward each target, so section switches taper instead of stepping, and the apex handover ramp chases
-the smoothed value.
+**The respected speed rides the pedal gauges' smoother toward the window's number**, so the plan tapers instead of
+stepping, and the apex handover seeds that same smoother with the corner's held speed.
+
+**The window's far edge is a cliff.** A bend leaves the window at `end` and the allowed speed steps up on that tick —
+the same discontinuity the old chain had at a point switch, and for the same reason: something is in view until it
+is not. The smoother is what turns it into a ramp (63% of the gap in 333 ms). If it still reads as a step in the car's
+behaviour, the lever is a distance taper, not a wider window — the 1.5x cap that once did this job was rejected for
+over-softening every corner.
 
 The horizon readings come out of Racer's shared `LookAheads` table, and the table is deliberately generic. A
 lookahead is only a horizon in seconds of travel: metres at the current speed (`v·t`), resolved against the
@@ -276,14 +274,9 @@ node chain each tick, wrap-aware, one walk per entry — so any horizon can be m
 read, and the arithmetic is cheap. What the named members (SteerRef, OneSec) buy is repetition: readers that
 want the same horizon every tick, or side by side, share a single resolution per tick instead of re-walking
 the chain. The set is exactly the horizons with readers — TwoSec left it in 2106 when the speedpoint trust
-joined OneSec, and in 2107 the four unread members (QuarterSec, HalfSec, ThreeQuarterSec, OneHalfSec) went the
+joined OneSec (that trust gate is gone with the table, 2119), and in 2107 the four unread members (QuarterSec,
+HalfSec, ThreeQuarterSec, OneHalfSec) went the
 same way — and a horizon read again and again earns a name; a one-off stays minted.
-
-Off, the switch decouples the whole system: the old term — its physics base, its offset row and its
-surface/slope/crest scaling — runs untouched, and a tick without a trusted point falls back to it, so the car
-never stands down to zero. `[ROUTESEED]` and `[ROUTEPOINT]` log the density and the handover, and the speedpoint
-debug text names each point's target beside the radius the law actually took, so sentinel ground reads `r999`
-on sight.
 
 ## The lane law
 

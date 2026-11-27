@@ -91,6 +91,7 @@ namespace ARS
         public int LiveSlidRadiusFarNode = -1;
         public float LiveSlidRadius = -1f;
         public float LiveRouteRadius = -1f;
+        public float LiveRouteDownhill = 1f;
         public enum LookAhead { SteerRef, OneSec };
         public Dictionary<LookAhead, TrackPoint> LookAheads = new Dictionary<LookAhead, TrackPoint>();
 
@@ -372,11 +373,6 @@ namespace ARS
         const float BrakeHorizonMarginMetres = 40f;
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
-        const int RouteSpeedPointSpacingNodes = 40;
-        readonly List<RouteSpeedPoint> _routeSpeedPoints = new List<RouteSpeedPoint>();
-        int _routeSpeedCursor = -1;
-        int _routeSpeedRevisionSeeded = -1;
-        RouteSpeedPoint _activeRouteSpeedPoint;
         int _planLogApexNode = -1;
 
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
@@ -460,190 +456,6 @@ namespace ARS
             return context;
         }
 
-        // Every 40th node seeds the lattice; then each apex pulls its two nearest points onto half the cadence
-        // either side of it — the half being where the numbers actually matter: the rear flank reads the approach
-        // road up to 20 nodes back, the front flank the exit road from 20 nodes out. One behaviour, every corner.
-        void SyncRouteSpeedPoints()
-        {
-            if (_routeSpeedRevisionSeeded == ARS.CornersRevision) return;
-            _routeSpeedRevisionSeeded = ARS.CornersRevision;
-            _routeSpeedPoints.Clear();
-            _routeSpeedCursor = -1;
-            _activeRouteSpeedPoint = null;
-
-            int count = ARS.TrackPoints.Count;
-            int spacing = RouteSpeedPointSpacingNodes;
-            int flank = RouteSpeedPointSpacingNodes / 2;
-            List<int> nodes = new List<int>();
-            for (int node = 0; node < count; node += spacing) nodes.Add(node);
-
-            foreach (CornerPoint corner in ARS.Corners)
-            {
-                int backIndex = -1, aheadIndex = -1;
-                int backDelta = int.MinValue, aheadDelta = int.MaxValue;
-                for (int i = 0; i < nodes.Count; i++)
-                {
-                    int delta = nodes[i] - corner.Node;
-                    if (!ARS.IsPointToPoint)
-                    {
-                        delta = ((delta % count) + count) % count;
-                        if (delta > count / 2) delta -= count;
-                    }
-                    if (delta < 0 && delta > backDelta) { backDelta = delta; backIndex = i; }
-                    else if (delta > 0 && delta < aheadDelta) { aheadDelta = delta; aheadIndex = i; }
-                }
-                if (backIndex >= 0)
-                    nodes[backIndex] = ARS.IsPointToPoint
-                        ? (int)ARS.Clamp(corner.Node - flank, 0, count - 1)
-                        : ((corner.Node - flank) % count + count) % count;
-                if (aheadIndex >= 0)
-                    nodes[aheadIndex] = ARS.IsPointToPoint
-                        ? (int)ARS.Clamp(corner.Node + flank, 0, count - 1)
-                        : ((corner.Node + flank) % count) % count;
-            }
-
-            nodes.Sort();
-            for (int i = nodes.Count - 1; i > 0; i--)
-                if (nodes[i] == nodes[i - 1]) nodes.RemoveAt(i);
-
-            foreach (int node in nodes)
-            {
-                RouteSpeedPoint entry = new RouteSpeedPoint(ARS.TrackPoints[node].Node, TightestSweepRadiusNear(node, count));
-                entry.SetTargetSpeedMps(RouteIdealSpeedForRadius(entry.Radius) * NearbyDownhillSpeedFactor(node, count));
-                _routeSpeedPoints.Add(entry);
-            }
-            ARS.Log(ARS.LogImportance.Error, "[ROUTESEED build " + ARS.ReadBuildNumber() + "] " + Name
-                + " seeded " + _routeSpeedPoints.Count + " points, flanks at half cadence");
-        }
-
-        // Half the seed spacing each side, so adjacent windows tile the route and no node falls between them —
-        // except across an apex, where the window stops at the point's own node (ApexWindowClamp).
-        float TightestSweepRadiusNear(int node, int count)
-        {
-            float tightest = float.MaxValue;
-            int from = -RouteSpeedPointSpacingNodes / 2;
-            int to = RouteSpeedPointSpacingNodes / 2;
-            ApexWindowClamp(node, count, ref from, ref to);
-            for (int offset = from; offset <= to; offset++)
-            {
-                int sample = ARS.IsPointToPoint ? (int)ARS.Clamp(node + offset, 0, count - 1)
-                    : ((node + offset) % count + count) % count;
-                float radius = ARS.TrackPoints[sample].SweepCurveRadius;
-                if (radius < tightest) tightest = radius;
-            }
-            return tightest;
-        }
-
-        // The point bakes the worst of what is nearby, mirroring the radius lookup's window: the most inclined
-        // trackpoint each way of the node, travelled forward, damped by the same hill law the old route term
-        // carries. Downhill only - uphill never raises the target, and crest stays out.
-        float NearbyDownhillSpeedFactor(int node, int count)
-        {
-            int from = -RouteSpeedPointSpacingNodes / 2;
-            int to = RouteSpeedPointSpacingNodes / 2;
-            ApexWindowClamp(node, count, ref from, ref to);
-            float steepestDescent = 0f;
-            for (int offset = from; offset <= to; offset++)
-            {
-                int sample = ARS.IsPointToPoint ? (int)ARS.Clamp(node + offset, 0, count - 1)
-                    : ((node + offset) % count + count) % count;
-                float descent = -ARS.TrackPoints[sample].SlopeSineTimes90 * ElevationToSlopeSine;
-                if (descent > steepestDescent) steepestDescent = descent;
-            }
-            if (steepestDescent <= 0f) return 1f;
-            float pitchDeg = ARS.RadToDeg((float)Math.Asin(ARS.Clamp(steepestDescent, 0f, 1f)));
-            return (float)Math.Sqrt(ARS.HillGripFactorFromPitchAngle(pitchDeg, this));
-        }
-
-        // The apex is a boundary the sweep may not cross, not a reason to delete the point. An apex behind the
-        // point means it reads only ahead of itself, an apex ahead means only behind — so no point ever bakes
-        // ground the corner system owns, and the first point past a corner reads the road it is leaving on
-        // instead of the corner it just left. A point boxed between two apexes keeps its own node alone.
-        void ApexWindowClamp(int node, int count, ref int from, ref int to)
-        {
-            int reach = RouteSpeedPointSpacingNodes / 2 + 1;
-            foreach (CornerPoint corner in ARS.Corners)
-            {
-                int delta = corner.Node - node;
-                if (!ARS.IsPointToPoint)
-                {
-                    delta = ((delta % count) + count) % count;
-                    if (delta > count / 2) delta -= count;
-                }
-                if (delta > reach || delta < -reach) continue;
-                if (delta <= 0) from = 0;
-                else to = 0;
-            }
-        }
-
-        float RouteSpeedPointTargetSpeedMps(float fallbackMps)
-        {
-            SyncRouteSpeedPoints();
-            RouteSpeedPoint point = ActiveRouteSpeedPoint();
-
-            // No active point: the old base still owns the speed, never a 0 m/s stand-down.
-            return point == null ? fallbackMps : point.TargetSpeedMps;
-        }
-
-        RouteSpeedPoint ActiveRouteSpeedPoint()
-        {
-            if (_routeSpeedPoints.Count == 0) return null;
-            if (!LookAheads.TryGetValue(LookAhead.OneSec, out TrackPoint oneSecLook) || oneSecLook == null) return null;
-            int oneSecFwd = ForwardNodeDistance(oneSecLook.Node);
-            int nodeCount = ARS.TrackPoints.Count;
-            if (_routeSpeedCursor < 0) _routeSpeedCursor = 0;
-            int startCursor = _routeSpeedCursor;
-            for (int steps = 0; steps < _routeSpeedPoints.Count; steps++)
-            {
-                // Signed car-to-point distance: a just-passed point folds to a small negative on circuits,
-                // and on point-to-point the raw subtraction already reads negative.
-                int ahead = ForwardNodeDistance(_routeSpeedPoints[_routeSpeedCursor].Node);
-                if (!ARS.IsPointToPoint && ahead > nodeCount / 2) ahead -= nodeCount;
-                if (ahead < 0)
-                {
-                    if (_routeSpeedCursor + 1 < _routeSpeedPoints.Count) _routeSpeedCursor++;
-                    else if (ARS.IsPointToPoint) break;
-                    else _routeSpeedCursor = 0;
-                    continue;
-                }
-                // The next point takes over the moment it fits the 1 s horizon; only when the horizon cannot
-                // reach it yet does the current point hold to its own node.
-                int nextCursor = _routeSpeedCursor + 1 < _routeSpeedPoints.Count
-                    ? _routeSpeedCursor + 1
-                    : (ARS.IsPointToPoint ? -1 : 0);
-                if (nextCursor < 0) break;
-                int nextAhead = ForwardNodeDistance(_routeSpeedPoints[nextCursor].Node);
-                if (!ARS.IsPointToPoint && nextAhead > nodeCount / 2) nextAhead -= nodeCount;
-                if (nextAhead < 0 || nextAhead <= oneSecFwd)
-                {
-                    _routeSpeedCursor = nextCursor;
-                    continue;
-                }
-                break;
-            }
-            RouteSpeedPoint selected = _routeSpeedPoints[_routeSpeedCursor];
-            int toPoint = ForwardNodeDistance(selected.Node);
-            if (!ARS.IsPointToPoint && toPoint > nodeCount / 2) toPoint -= nodeCount;
-            if (_routeSpeedCursor != startCursor) LogRouteSpeedPointAdvance(startCursor, selected);
-            // Trusted only within the car's 1 s horizon: a farther point's curve-baked speed would cap the straight.
-            if (toPoint < 0 || toPoint > oneSecFwd)
-            {
-                _activeRouteSpeedPoint = null;
-                return null;
-            }
-            _activeRouteSpeedPoint = selected;
-            return selected;
-        }
-
-        void LogRouteSpeedPointAdvance(int fromCursor, RouteSpeedPoint point)
-        {
-            ARS.Log(ARS.LogImportance.Error, "[ROUTEPOINT build " + ARS.ReadBuildNumber() + "] "
-                + Name + " cursor " + fromCursor + "->" + _routeSpeedCursor
-                + (_routeSpeedCursor == 0 ? " wrap" : "")
-                + " node " + point.Node
-                + " r " + point.Radius.ToString("0", CultureInfo.InvariantCulture)
-                + " tgt " + point.TargetSpeedMps.ToString("0.0", CultureInfo.InvariantCulture));
-        }
 
         void SyncCornerContexts()
         {
@@ -961,10 +773,6 @@ namespace ARS
             DriverName = _baseName;
 
             _cornerContexts.Clear();
-            _routeSpeedPoints.Clear();
-            _routeSpeedCursor = -1;
-            _routeSpeedRevisionSeeded = -1;
-            _activeRouteSpeedPoint = null;
             _cornersRevisionSeeded = -1;
             _skippedApexes.Clear();
             _brakeAnalysisApexNode = -1;
@@ -2768,7 +2576,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
             float followTrackSpd = TrackSpeed.RouteCurvature
-                ? RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint) * (float)Math.Sqrt(RouteSurfaceGrip())
+                ? RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint) * LiveRouteDownhill * (float)Math.Sqrt(RouteSurfaceGrip())
                 : 999f;
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
@@ -2823,19 +2631,14 @@ const float RequirementLookaheadSeconds = 3.95f;
             float cornerTerm = cornerSpd;
             float cornerArrivalTerm = cornerArrival;
 
-            // Route Speed Points on: the seeded per-section target IS the route term; off: the old term, untouched.
-            float routeTerm = ARS.RouteSpeedPoints
-                ? RouteSpeedPointTargetSpeedMps(followTrackSpd + ARS.MphToMps(_routeSpeedOffsetMph))
-                : followTrackSpd + ARS.MphToMps(_routeSpeedOffsetMph);
-            // The respected speed rides the pedal smoother toward the section target: switches taper instead
-            // of stepping. First service snaps (no ramp from the 0 seed); off leaves the old term untouched.
-            if (ARS.RouteSpeedPoints)
-            {
-                _routeSmooth.Target = routeTerm;
-                if (_routeSmooth.Value <= 0f) _routeSmooth.Value = routeTerm;
-                _routeSmooth.Advance(TickScale);
-                routeTerm = _routeSmooth.Value;
-            }
+            // The route term is the lookahead window's own speed plus the route learner's offset, and the respected
+            // speed rides the smoother toward it: a sliding window moves every tick, so the smoother is what turns
+            // that motion into a plan instead of a demand. First service snaps (no ramp from the 0 seed).
+            float routeTerm = followTrackSpd + ARS.MphToMps(_routeSpeedOffsetMph);
+            _routeSmooth.Target = routeTerm;
+            if (_routeSmooth.Value <= 0f) _routeSmooth.Value = routeTerm;
+            _routeSmooth.Advance(TickScale);
+            routeTerm = _routeSmooth.Value;
 
             if (_cornerMode)
             {
@@ -2844,23 +2647,15 @@ const float RequirementLookaheadSeconds = 3.95f;
                     _cornerModeApexPassedAt = Game.GameTime;
                     _cornerSpeedAuthority = false;
                     // The corner's held speed becomes the respected speed's own starting value, and the smoother —
-                    // already chasing the next speed point — climbs from it at its own rate. No blend, no clock, and
+                    // already chasing the window's number — climbs from it at its own rate. No blend, no clock, and
                     // no step in either direction: a target below the held speed descends just as smoothly.
-                    // Speed points off means there is no smoother to seed (it only advances under that flag), so the
-                    // corner releases straight onto the curvature term and the handover is the step it always was.
-                    if (ARS.RouteSpeedPoints)
-                    {
-                        _routeSmooth.Value = _cornerModeSpeed;
-                        routeTerm = _routeSmooth.Value;
-                    }
+                    _routeSmooth.Value = _cornerModeSpeed;
+                    routeTerm = _routeSmooth.Value;
                     ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": APEX corner #" + _cornerModeNode
                         + " passed, car " + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture)
                         + " m/s, held " + _cornerModeSpeed.ToString("0.0", CultureInfo.InvariantCulture)
-                        + " m/s, " + (ARS.RouteSpeedPoints
-                            ? "seeded route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture)
-                              + " chasing " + _routeSmooth.Target.ToString("0.0", CultureInfo.InvariantCulture)
-                            : "route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture))
-                        + " m/s");
+                        + " m/s, seeded route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture)
+                        + " chasing " + _routeSmooth.Target.ToString("0.0", CultureInfo.InvariantCulture) + " m/s");
                 }
 
                 if (_cornerModeNode < 0 || (_cornerModeApexPassedAt >= 0 && Game.GameTime - _cornerModeApexPassedAt >= CornerVerdictMs))
@@ -3933,27 +3728,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             UI.ShowSubtitle(_projectionArmed ? "~r~" + percent : "~b~" + percent, 50);
         }
 
-        public void DrawRouteSpeedPointOffsets()
-        {
-            // The cursor's own point plus the next four, always on screen: lime only while the cursor's
-            // point actually drives, white through trust gaps - the overlay never hides with the trust.
-            if (_routeSpeedPoints.Count == 0 || _routeSpeedCursor < 0) return;
-            for (int i = 0; i < 5; i++)
-            {
-                int index = _routeSpeedCursor + i;
-                if (index >= _routeSpeedPoints.Count)
-                {
-                    if (ARS.IsPointToPoint) break;
-                    index %= _routeSpeedPoints.Count;
-                }
-                RouteSpeedPoint point = _routeSpeedPoints[index];
-                if (point.Node < 0 || point.Node >= ARS.TrackPoints.Count) continue;
-                string text = "#" + index + " " + point.TargetSpeedMps.ToString("0.0", CultureInfo.InvariantCulture) + "mps~n~r"
-                    + point.Radius.ToString("0", CultureInfo.InvariantCulture) + "m";
-                ARS.DrawText(ARS.TrackPoints[point.Node].Position + Vector3.WorldUp * 2.5f,
-                    text, i == 0 && _activeRouteSpeedPoint != null ? Color.LimeGreen : Color.White, 0.5f);
-            }
-        }
 
         public void DrawRouteSpeedSubtitle()
         {
@@ -3961,11 +3735,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             string colour = _projectionWidenMeters > 0f && _projectionWidenMeters < RouteSpeedLearnWidenMetres ? "~g~"
                 : _projectionWidenMeters >= RouteSpeedLearnWidenMetres ? "~r~" : "~w~";
             string second = colour + _projectionWidenMeters.ToString("0.0", CultureInfo.InvariantCulture) + " m";
-            string third = _activeRouteSpeedPoint == null
-                ? "~w~route points: none"
-                : "~w~#" + _routeSpeedCursor + " n" + _activeRouteSpeedPoint.Node
-                    + " r" + _activeRouteSpeedPoint.Radius.ToString("0", CultureInfo.InvariantCulture)
-                    + " " + _activeRouteSpeedPoint.TargetSpeedMps.ToString("0.0", CultureInfo.InvariantCulture) + "mps";
+            string third = LiveRouteRadius >= 999f
+                ? "~w~window: straight"
+                : "~w~window r" + LiveRouteRadius.ToString("0", CultureInfo.InvariantCulture)
+                    + " dh " + LiveRouteDownhill.ToString("0.00", CultureInfo.InvariantCulture);
             UI.ShowSubtitle(first + "~n~" + second + "~n~" + third, 50);
         }
 
@@ -4484,22 +4257,24 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float RouteRadiusFarEndSeconds = 2f;
         const float RouteRadiusSpanSeconds = 1f;
 
-        const int RouteRadiusMeanCount = 2;
-
-        float RouteRadiusWindow(float endSeconds, ref int nearNode, ref int midNode, ref int farNode)
+        // One lookahead window, slid forward with the car: the tightest radius between the car and the window's far
+        // end wins — the lowest speed wins, because the law is monotone in radius — and the same span bakes the
+        // steepest descent. No table, so no lattice phase and no hole: the window is wherever the car is.
+        float RouteRadiusWindow(float endSeconds, ref int nearNode, ref int midNode, ref int farNode, out float downhill)
         {
             int count = ARS.TrackPoints.Count;
             float speed = Car.Velocity.Length();
             int span = Math.Min((int)(speed * RouteRadiusSpanSeconds), count - 1);
             int end = Math.Min((int)(speed * Math.Max(endSeconds, 0f)), count - 1);
             int start = end - span;
+            if (start < 0) start = 0;   // the span is always one second, never behind the car, whatever the lead row holds
+            downhill = 1f;
             if (span < 8) return 999f;
 
             int carNode = CurrentTrackPoint.Node;
             float r = 999f;
             int tightestNode = -1;
-            float[] tightest = new float[RouteRadiusMeanCount];
-            for (int i = 0; i < tightest.Length; i++) tightest[i] = 999f;
+            float steepestDescent = 0f;
             for (int offset = start; offset <= end; offset++)
             {
                 int node = WrappedNode(carNode + offset);
@@ -4509,30 +4284,20 @@ const float RequirementLookaheadSeconds = 3.95f;
                     r = radius;
                     tightestNode = node;
                 }
-                if (radius >= tightest[RouteRadiusMeanCount - 1]) continue;
-                int slot = RouteRadiusMeanCount - 1;
-                while (slot > 0 && tightest[slot - 1] > radius)
-                {
-                    tightest[slot] = tightest[slot - 1];
-                    slot--;
-                }
-                tightest[slot] = radius;
+                float descent = -ARS.TrackPoints[node].SlopeSineTimes90 * ElevationToSlopeSine;
+                if (descent > steepestDescent) steepestDescent = descent;
             }
 
-            float sum = 0f;
-            int used = 0;
-            for (int i = 0; i < tightest.Length; i++)
+            if (steepestDescent > 0f)
             {
-                if (tightest[i] >= 999f) break;
-                sum += tightest[i];
-                used++;
+                float pitchDeg = ARS.RadToDeg((float)Math.Asin(ARS.Clamp(steepestDescent, 0f, 1f)));
+                downhill = (float)Math.Sqrt(ARS.HillGripFactorFromPitchAngle(pitchDeg, this));
             }
-            float bandRadius = used > 0 ? sum / used : r;
 
             nearNode = WrappedNode(carNode + start);
             midNode = tightestNode;
             farNode = WrappedNode(carNode + end);
-            return bandRadius;
+            return r;
         }
 
         float NitrousRouteRadius()
@@ -4557,6 +4322,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (count < 10)
             {
                 LiveRouteRadius = 999f;
+                LiveRouteDownhill = 1f;
                 LiveRouteRadiusNearNode = -1;
                 LiveRouteRadiusMidNode = -1;
                 LiveRouteRadiusFarNode = -1;
@@ -4568,9 +4334,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
             float r = 999f;
+            float downhill = 1f;
             if (ARS.RouteRadiusFar)
             {
-                r = RouteRadiusWindow(RouteRadiusFarEndSeconds, ref LiveRouteRadiusNearNode, ref LiveRouteRadiusMidNode, ref LiveRouteRadiusFarNode);
+                r = RouteRadiusWindow(RouteRadiusFarEndSeconds, ref LiveRouteRadiusNearNode, ref LiveRouteRadiusMidNode, ref LiveRouteRadiusFarNode, out downhill);
             }
             else
             {
@@ -4579,11 +4346,17 @@ const float RequirementLookaheadSeconds = 3.95f;
                 LiveRouteRadiusFarNode = -1;
             }
 
-            float slid = RouteRadiusWindow(ARS.SlidRadiusLeadSeconds, ref LiveSlidRadiusNearNode, ref LiveSlidRadiusMidNode, ref LiveSlidRadiusFarNode);
+            float slidDownhill = 1f;
+            float slid = RouteRadiusWindow(ARS.SlidRadiusLeadSeconds, ref LiveSlidRadiusNearNode, ref LiveSlidRadiusMidNode, ref LiveSlidRadiusFarNode, out slidDownhill);
             LiveSlidRadius = slid;
-            if (slid < r) r = slid;
+            if (slid < r)
+            {
+                r = slid;
+                downhill = slidDownhill;
+            }
 
             LiveRouteRadius = ARS.Clamp(r, 5f, 999f);
+            LiveRouteDownhill = downhill;
             return LiveRouteRadius;
         }
 

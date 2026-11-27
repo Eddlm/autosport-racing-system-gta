@@ -140,7 +140,7 @@ build where code reads or writes a key the schema does not declare.
 | `HillGripEffect` | 100 | 100 | 0, 25, 50, 75, 100, 150, 200 |
 | `GsLaneThrottleFloor` | True | True |  |
 | `RouteRadiusFar` | False | True |  |
-| `SlidRadiusLeadSeconds` | 1.0 | 1.5 | 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5 |
+| `SlidRadiusLeadSeconds` | 1.0 | 1.0 | 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0 |
 | `Rubberbanding` | 100 | 100 | 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 |
 | `RubberbandMode` | Natural | Natural | Natural, Artificial |
 | `StagedSpawns` | False | False |  |

@@ -34,8 +34,7 @@ namespace ARS
         ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis,
         ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip,
         ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry,
-        ShowFrontSlip, ShowSlideAngle, ShowThrottleReason, ShowTrLateral, ShowCurveRadius,
-        ShowRouteSpeedOffsets
+        ShowFrontSlip, ShowSlideAngle, ShowThrottleReason, ShowTrLateral, ShowCurveRadius
     }
 
     public partial class ARS : Script
@@ -121,7 +120,6 @@ namespace ARS
         public static bool BrakeLearning = true;
         public static bool BrakeLearningNotify = false;
         public static bool CornerSpeedLearning = true;
-        public static bool RouteSpeedPoints = false;
         public static bool CornerSpeedLearnNotify = true;
         public static bool SlideBrakeCap = true;
         public static float MaxCrestLift = 0.4f;
@@ -192,8 +190,7 @@ namespace ARS
         { Options.ShowGLine, false },
         { Options.ShowRouteRadius, false },
         { Options.ShowTrLateral, false },
-        { Options.ShowCurveRadius, false },
-        { Options.ShowRouteSpeedOffsets, false }
+        { Options.ShowCurveRadius, false }
     };
 
         public const float SpectateCheckpointRadiusMeters = 400f;
@@ -942,7 +939,7 @@ namespace ARS
             AddSub(rivalsMenu, rivalTractionMenu);
             AddSub(rivalsMenu, rivalSteeringMenu);
 
-            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Speed Offset (mph)", "Seeds the speed rivals dare to carry into every corner; each corner's learner moves it from there inside ±10 m/s. Only the slower of this and Road Curvature Offset applies.", SettingsRepair.OptionsFor("CornerOffset"));
+            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Speed Offset (mph)", "Seeds the speed rivals dare to carry into every corner; each corner's learner moves it from there inside ±10 m/s. A corner takes the speed whenever its braking ramp drops below the car's own speed.", SettingsRepair.OptionsFor("CornerOffset"));
             cornerOffsetItem.ItemChanged += (sender, args) =>
             {
                 CornerOffsetMph = int.Parse(cornerOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -952,7 +949,7 @@ namespace ARS
             rivalPaceMenu.Add(cornerOffsetItem);
             HookListTextPicker(cornerOffsetItem);
 
-            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Road Curvature Offset (mph)", "Seeds the speed the road's curvature allows ahead; the route learner moves it inside ±20 mph. Only the slower of this and Corner Speed Offset applies.", SettingsRepair.OptionsFor("RouteOffset"));
+            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Road Curvature Offset (mph)", "A flat shift on the route term's own speed: the lookahead window says what the road's curvature allows, this moves it in mph. The learner that would move it is parked, so this row is the only thing that does. A corner overrides the result whenever its braking ramp asks for less.", SettingsRepair.OptionsFor("RouteOffset"));
             routeOffsetItem.ItemChanged += (sender, args) =>
             {
                 RouteOffsetMph = int.Parse(routeOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -978,14 +975,6 @@ namespace ARS
                 SaveRacerSetting("CornerSpeedLearning", CornerSpeedLearning.ToString());
             };
             rivalPaceMenu.Add(cornerSpeedLearningItem);
-
-            NativeCheckboxItem routeSpeedPointsItem = new NativeCheckboxItem("Route Speed Points", "On: the route term is a per-section target speed - every 40th node carries one absolute speed, read from the route's own ideal-speed law (apex speed with downforce, rising above the cap radius at dialled steps, damped by the steepest nearby downhill), bounded 0 to the intended-speed ceiling; points near a corner apex are pruned and a tick with no point inside the car's 2 s horizon falls back to the old term. Off: the old route term, untouched.", RouteSpeedPoints);
-            routeSpeedPointsItem.CheckboxChanged += (sender, args) =>
-            {
-                RouteSpeedPoints = routeSpeedPointsItem.Checked;
-                SaveRacerSetting("RouteSpeedPoints", RouteSpeedPoints.ToString());
-            };
-            rivalPaceMenu.Add(routeSpeedPointsItem);
 
             NativeCheckboxItem slideBrakeItem = new NativeCheckboxItem("Slide Brake Cap", "From half the car's peak slip angle at that speed to 1.5x it, the brake eases from full down to a third: a sliding tyre has no grip left to brake with, and pressing harder only upsets it. Off leaves the pedal to the plan alone.", SlideBrakeCap);
             slideBrakeItem.CheckboxChanged += (sender, args) =>
@@ -1021,7 +1010,7 @@ namespace ARS
             };
             rivalPaceMenu.Add(routeRadiusFarItem);
 
-            NativeListItem<string> slidRadiusLeadItem = new NativeListItem<string>("Slid Radius Lead (s)", "The second sample is the same two-second fit as the first, only slid back by this much: 0 puts it entirely behind the car, ending at the wheels - what the car has just driven; 0.5 ends it half a second ahead; 1.5 nearly sits it on top of the first. The tighter of the two sets the speed.", SettingsRepair.OptionsFor("SlidRadiusLeadSeconds"));
+            NativeListItem<string> slidRadiusLeadItem = new NativeListItem<string>("Slid Radius Lead (s)", "The lookahead window is one second long; this picks where it sits. 1.0 puts it right at the car - what it is standing on plus the next second; 2.0 puts it one to two seconds ahead, where the road is not yet under the wheels; 3.0 two to three. The tighter of this window and the anchored one sets the route speed.", SettingsRepair.OptionsFor("SlidRadiusLeadSeconds"));
             slidRadiusLeadItem.ItemChanged += (sender, args) =>
             {
                 SlidRadiusLeadSeconds = float.Parse(slidRadiusLeadItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1321,7 +1310,6 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw a line from your own car's roof along the horizontal acceleration it pulls, one metre per G, with a cross at the tail. Your car only.");
             AddDebugCheckbox(debugMenu, Options.ShowRouteRadius, "Show Route Radius", "Draw the three nodes the route radius is measured from: the car's own, the near sample and the far one at speed/grip and twice that ahead.");
             AddDebugCheckbox(debugMenu, Options.ShowTrLateral, "Show TRlateral", "The tyre's peak slide angle at this speed, drawn on the focus car: a line per side along the car from the rear to the front tip, and from that tip a line of the same length opening back at the angle (LateralTractionCurveDegrees / (1 + 0.1·v)) — the horn opens wide when the car is slow and closes onto the body line at speed. A second horn per side (red) opens at the car's live slide angle, so the pair shows the tyre's limit (yellow) against where the car actually sits (red).");
-            AddDebugCheckbox(debugMenu, Options.ShowRouteSpeedOffsets, "Show Route Speed Offsets", "Draw the active route-speed point's offset and the next three as text at each point's position. Wrap-aware on circuits; stops at the last point on point-to-point tracks.");
             AddDebugCheckbox(debugMenu, Options.ShowCurveRadius, "Show Curve %", "The focus car's own path radius against the track's radius under it, as a bare percentage in the subtitle: over 100 the car is running wider than the track asks, under 100 it is holding or tightening. The path radius is a 2D circle through the car and its own projections at half a second and one second; the track radius is the sweep radius at the car's node.");
 
             NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Nothing is forced past the level, so Error keeps only errors.", EnumLabels<LogImportance>());
@@ -2188,14 +2176,6 @@ namespace ARS
                         ?? Racers.Where(c => !c.ControlledByPlayer).OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault()
                         ?? PlayerRacer;
                     if (curveRacer != null && CanWeUse(curveRacer.Car)) curveRacer.DrawRouteSpeedSubtitle();
-                }
-
-                if (raceLive && DebugToggles[Options.ShowRouteSpeedOffsets])
-                {
-                    Racer pointRacer = DebugFocusRacer
-                        ?? Racers.Where(c => !c.ControlledByPlayer).OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault()
-                        ?? PlayerRacer;
-                    if (pointRacer != null && CanWeUse(pointRacer.Car)) pointRacer.DrawRouteSpeedPointOffsets();
                 }
 
                 if (raceLive && DebugToggles[Options.ShowRouteRadius])
@@ -3713,7 +3693,6 @@ namespace ARS
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
             CornerSpeedLearning = SettingsMenuStore.GetBool("CornerSpeedLearning", CornerSpeedLearning);
-            RouteSpeedPoints = SettingsMenuStore.GetBool("RouteSpeedPoints", RouteSpeedPoints);
             CornerSpeedLearnNotify = DevelopmentMenuStore.GetBool("CornerSpeedLearnNotify", CornerSpeedLearnNotify);
             SlideBrakeCap = SettingsMenuStore.GetBool("SlideBrakeCap", SlideBrakeCap);
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);

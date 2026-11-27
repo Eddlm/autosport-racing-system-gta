@@ -442,23 +442,6 @@ namespace ARS
         public bool RequiresBraking = false;
     }
 
-    // One absolute target speed per seeded node, owned by each racer; the setter holds the bound and seeding
-    // is its only caller.
-    public class RouteSpeedPoint
-    {
-        public readonly int Node;
-        public readonly float Radius;
-        float _targetSpeedMps;
-
-        public RouteSpeedPoint(int node, float radius)
-        {
-            Node = node;
-            Radius = radius;
-        }
-
-        public float TargetSpeedMps => _targetSpeedMps;
-        public void SetTargetSpeedMps(float value) => _targetSpeedMps = ARS.Clamp(value, 0f, AiConstants.MaxIntendedSpeedMps);
-    }
     public class TrackStartInfo
     {
         public string TrackPath;
