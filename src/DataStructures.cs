@@ -271,7 +271,6 @@ namespace ARS
         GridWait,
         Finished,
         Corner,
-        CornerToRoute,
         Route,
         Standoff,
         Chicane,
@@ -429,10 +428,13 @@ namespace ARS
     public class CornerContext
     {
         // The seed every initialiser and fallback derives from: one value owns all of them.
-        public const float BrakeFactorSeed = 0.75f;
+        public const float BrakeFactorSeed = 0.6f;
         public CornerPoint Point;
         public float BrakeFactor = BrakeFactorSeed;
-        public float CornerSpeedOffsetMps = 0f;
+        // The menu's Corner Speed Offset is where every corner STARTS, not a second additive layered on the
+        // learned value: one seed for all of them, and the corner speed learner moves each from there.
+        public static float SeedSpeedOffsetMps => ARS.MphToMps(ARS.CornerOffsetMph);
+        public float CornerSpeedOffsetMps = SeedSpeedOffsetMps;
         public bool RequiresBraking = false;
     }
 

@@ -219,6 +219,7 @@ namespace ARS
         float _speedRoute;
         float _routeSpeedOffsetMph;
         float _routeOffsetSeedMph;
+        float _cornerOffsetSeedMph;
 
         public float ThrottleWanted { get { return _thrWanted; } }
         public float ThrottleFinal { get { return _thrFinal; } }
@@ -415,15 +416,11 @@ namespace ARS
         bool _cornerSpeedHitOffTrack;
         int _cornerSpeedOutsideSamples;
 
-        const int ApexRampMs = 1000;
         const int CornerVerdictMs = 2000;
 
         const float CornerDeselectMps = 25f;
         bool _cornerMode;
         bool _cornerSpeedAuthority;
-        bool _apexRampActive;
-        float _apexRampFrom;
-        int _apexRampStartMs;
         int _cornerModeNode = -1;
         float _cornerModeSpeed = 999f;
         int _cornerModeApexPassedAt = -1;
@@ -432,7 +429,9 @@ namespace ARS
         int _sideBySideSteerAt;
         public float BrakeFactorForApex(int apexNode) => TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : CornerContext.BrakeFactorSeed;
 
-        public float CornerSpeedOffsetFor(int apexNode) => ARS.CornerSpeedLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
+        // Seed and learning are one number: the setting is where it starts, the learner moves it. The toggle only
+        // stops the moving — turning Corner Speed Learning off leaves the menu's offset in force on every corner.
+        public float CornerSpeedOffsetFor(int apexNode) => TryGetCornerContext(apexNode, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
         float _divebombBrakeBonus;
 
         bool TryGetCornerContext(int apexNode, out CornerContext context)
@@ -455,7 +454,9 @@ namespace ARS
             return context;
         }
 
-        // Every 50th node seeds unconditionally: tightest swept radius within half the spacing, then the prune hands corner ground away.
+        // Every 40th node seeds the lattice; then each apex pulls its two nearest points onto half the cadence
+        // either side of it — the half being where the numbers actually matter: the rear flank reads the approach
+        // road up to 20 nodes back, the front flank the exit road from 20 nodes out. One behaviour, every corner.
         void SyncRouteSpeedPoints()
         {
             if (_routeSpeedRevisionSeeded == ARS.CornersRevision) return;
@@ -463,32 +464,61 @@ namespace ARS
             _routeSpeedPoints.Clear();
             _routeSpeedCursor = -1;
             _activeRouteSpeedPoint = null;
-            for (int node = 0; node < ARS.TrackPoints.Count; node += RouteSpeedPointSpacingNodes)
+
+            int count = ARS.TrackPoints.Count;
+            int spacing = RouteSpeedPointSpacingNodes;
+            int flank = RouteSpeedPointSpacingNodes / 2;
+            List<int> nodes = new List<int>();
+            for (int node = 0; node < count; node += spacing) nodes.Add(node);
+
+            foreach (CornerPoint corner in ARS.Corners)
             {
-                // Generate every candidate unconditionally; the prune passes own what dies.
-                RouteSpeedPoint entry = new RouteSpeedPoint(ARS.TrackPoints[node].Node, TightestSweepRadiusNear(node, ARS.TrackPoints.Count));
-                entry.SetTargetSpeedMps(RouteIdealSpeedForRadius(entry.Radius) * NearbyDownhillSpeedFactor(node, ARS.TrackPoints.Count));
+                int backIndex = -1, aheadIndex = -1;
+                int backDelta = int.MinValue, aheadDelta = int.MaxValue;
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    int delta = nodes[i] - corner.Node;
+                    if (!ARS.IsPointToPoint)
+                    {
+                        delta = ((delta % count) + count) % count;
+                        if (delta > count / 2) delta -= count;
+                    }
+                    if (delta < 0 && delta > backDelta) { backDelta = delta; backIndex = i; }
+                    else if (delta > 0 && delta < aheadDelta) { aheadDelta = delta; aheadIndex = i; }
+                }
+                if (backIndex >= 0)
+                    nodes[backIndex] = ARS.IsPointToPoint
+                        ? (int)ARS.Clamp(corner.Node - flank, 0, count - 1)
+                        : ((corner.Node - flank) % count + count) % count;
+                if (aheadIndex >= 0)
+                    nodes[aheadIndex] = ARS.IsPointToPoint
+                        ? (int)ARS.Clamp(corner.Node + flank, 0, count - 1)
+                        : ((corner.Node + flank) % count) % count;
+            }
+
+            nodes.Sort();
+            for (int i = nodes.Count - 1; i > 0; i--)
+                if (nodes[i] == nodes[i - 1]) nodes.RemoveAt(i);
+
+            foreach (int node in nodes)
+            {
+                RouteSpeedPoint entry = new RouteSpeedPoint(ARS.TrackPoints[node].Node, TightestSweepRadiusNear(node, count));
+                entry.SetTargetSpeedMps(RouteIdealSpeedForRadius(entry.Radius) * NearbyDownhillSpeedFactor(node, count));
                 _routeSpeedPoints.Add(entry);
             }
-            PruneRouteSpeedPoints();
-        }
-
-        // Prune: a point whose node has a corner apex within the sweep's reach hands that ground to the corner system.
-        void PruneRouteSpeedPoints()
-        {
-            int seeded = _routeSpeedPoints.Count;
-            for (int i = _routeSpeedPoints.Count - 1; i >= 0; i--)
-                if (CornerWithinSeedSpacing(_routeSpeedPoints[i].Node, ARS.TrackPoints.Count)) _routeSpeedPoints.RemoveAt(i);
             ARS.Log(ARS.LogImportance.Error, "[ROUTESEED build " + ARS.ReadBuildNumber() + "] " + Name
-                + " seeded " + seeded + " points, kept " + _routeSpeedPoints.Count + " after prune");
+                + " seeded " + _routeSpeedPoints.Count + " points, flanks at half cadence");
         }
 
-        // Half the seed spacing each side, so adjacent windows tile the route and no node falls between them.
+        // Half the seed spacing each side, so adjacent windows tile the route and no node falls between them —
+        // except across an apex, where the window stops at the point's own node (ApexWindowClamp).
         float TightestSweepRadiusNear(int node, int count)
         {
             float tightest = float.MaxValue;
-            int half = RouteSpeedPointSpacingNodes / 2;
-            for (int offset = -half; offset <= half; offset++)
+            int from = -RouteSpeedPointSpacingNodes / 2;
+            int to = RouteSpeedPointSpacingNodes / 2;
+            ApexWindowClamp(node, count, ref from, ref to);
+            for (int offset = from; offset <= to; offset++)
             {
                 int sample = ARS.IsPointToPoint ? (int)ARS.Clamp(node + offset, 0, count - 1)
                     : ((node + offset) % count + count) % count;
@@ -503,9 +533,11 @@ namespace ARS
         // carries. Downhill only - uphill never raises the target, and crest stays out.
         float NearbyDownhillSpeedFactor(int node, int count)
         {
-            int half = RouteSpeedPointSpacingNodes / 2;
+            int from = -RouteSpeedPointSpacingNodes / 2;
+            int to = RouteSpeedPointSpacingNodes / 2;
+            ApexWindowClamp(node, count, ref from, ref to);
             float steepestDescent = 0f;
-            for (int offset = -half; offset <= half; offset++)
+            for (int offset = from; offset <= to; offset++)
             {
                 int sample = ARS.IsPointToPoint ? (int)ARS.Clamp(node + offset, 0, count - 1)
                     : ((node + offset) % count + count) % count;
@@ -517,8 +549,11 @@ namespace ARS
             return (float)Math.Sqrt(ARS.HillGripFactorFromPitchAngle(pitchDeg, this));
         }
 
-        // The prohibition is the sweep's own reach plus one: half the seed spacing back and forth, +1, around the apex.
-        bool CornerWithinSeedSpacing(int node, int count)
+        // The apex is a boundary the sweep may not cross, not a reason to delete the point. An apex behind the
+        // point means it reads only ahead of itself, an apex ahead means only behind — so no point ever bakes
+        // ground the corner system owns, and the first point past a corner reads the road it is leaving on
+        // instead of the corner it just left. A point boxed between two apexes keeps its own node alone.
+        void ApexWindowClamp(int node, int count, ref int from, ref int to)
         {
             int reach = RouteSpeedPointSpacingNodes / 2 + 1;
             foreach (CornerPoint corner in ARS.Corners)
@@ -529,9 +564,10 @@ namespace ARS
                     delta = ((delta % count) + count) % count;
                     if (delta > count / 2) delta -= count;
                 }
-                if (delta >= -reach && delta <= reach) return true;
+                if (delta > reach || delta < -reach) continue;
+                if (delta <= 0) from = 0;
+                else to = 0;
             }
-            return false;
         }
 
         float RouteSpeedPointTargetSpeedMps(float fallbackMps)
@@ -605,6 +641,17 @@ namespace ARS
 
         void SyncCornerContexts()
         {
+            // The setting moved: carry every corner by the same delta so learning keeps its distance from the
+            // seed. This runs before the revision gate and before any context is born, so a fresh corner is
+            // seeded once and never shifted on top of that.
+            if (ARS.CornerOffsetMph != _cornerOffsetSeedMph)
+            {
+                float shift = ARS.MphToMps(ARS.CornerOffsetMph - _cornerOffsetSeedMph);
+                foreach (CornerContext context in _cornerContexts.Values)
+                    context.CornerSpeedOffsetMps = ARS.Clamp(context.CornerSpeedOffsetMps + shift, -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
+                _cornerOffsetSeedMph = ARS.CornerOffsetMph;
+            }
+
             if (_cornersRevisionSeeded == ARS.CornersRevision) return;
             _cornersRevisionSeeded = ARS.CornersRevision;
             foreach (CornerPoint corner in ARS.Corners)
@@ -865,9 +912,11 @@ namespace ARS
             _cornerModeSpeed = 999f;
             _cornerModeApexPassedAt = -1;
             _cornerSpeedAuthority = false;
-            _apexRampActive = false;
             _routeOffsetSeedMph = ARS.Clamp(ARS.RouteOffsetMph, -RouteSpeedLearnLimitMph, RouteSpeedLearnLimitMph);
             SetRouteSpeedOffset(_routeOffsetSeedMph);
+            // Every corner is about to be born from this seed, so the stamp starts on it: a reset must not then
+            // read as a setting change and shift the fresh contexts off their own seed.
+            _cornerOffsetSeedMph = ARS.CornerOffsetMph;
             _lapOdometer = 0;
             _lastLapNode = -1;
             _lapStartNode = -1;
@@ -1656,8 +1705,8 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float SlidingFraction = 0.3f;
 
         const float CountersteerBlendStart = 1f;
-        const float CountersteerBlendMid = 1.5f;
-        const float CountersteerBlendFull = 2.5f;
+        const float CountersteerBlendMid = 2f;
+        const float CountersteerBlendFull = 4f;
         const float CountersteerRecoilShare = 0.5f;
         const float CountersteerPedalCap = 0.5f;
         const float CountersteerMinSpeedMph = 10f;
@@ -2283,10 +2332,12 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         float PlannedCornerArrivalSpeed(CornerPoint corner)
         {
+            // CornerApexSpeed already carries this corner's offset — the menu setting seeds it, the learner moves
+            // it. Nothing is added here: the offset has one writer.
             float speed = ARS.CornerApexSpeed(corner, this);
             if (TrackSpeed.ChicaneBoost && Brain.Corner != null && Brain.Corner.Point.IsChicane)
                 speed += ARS.MphToMps(10f);
-            return speed + ARS.MphToMps(ARS.CornerOffsetMph);
+            return speed;
         }
 
         void UpdateBrakeRampAnalysis()
@@ -2511,7 +2562,6 @@ const float RequirementLookaheadSeconds = 3.95f;
                 + " apex at " + SignedMetresToNode(apexNode).ToString("0.0", CultureInfo.InvariantCulture) + " m");
             _cornerMode = true;
             _cornerSpeedAuthority = true;
-            _apexRampActive = false;
             _cornerModeNode = apexNode;
             _cornerModeSpeed = heldSpeed;
             _cornerModeApexPassedAt = -1;
@@ -2546,18 +2596,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerModeDistanceNodes = 0;
             _cornerModeApexTargetNodes = 0;
             _cornerModeLastNode = -1;
-        }
-
-        float ApexRampSpeed(float routeTerm)
-        {
-            float t = (Game.GameTime - _apexRampStartMs) / (float)ApexRampMs;
-            if (t >= 1f)
-            {
-                _apexRampActive = false;
-                return routeTerm;
-            }
-            if (t < 0f) t = 0f;
-            return _apexRampFrom + (routeTerm - _apexRampFrom) * t;
         }
 
         void ReleaseCornerSpeedLocks()
@@ -2778,9 +2816,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
             // Route is the default authority, a corner an override: it latches only lower and owns the speed to
-            // that corner's apex, where it ramps back into the live route term.
-            float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
-            float cornerArrivalTerm = cornerArrival + ARS.MphToMps(ARS.CornerOffsetMph);
+            // that corner's apex, where it ramps back into the live route term. Each term already carries its own
+            // offset (corner: the seeded learner value, route: _routeSpeedOffsetMph) — no offset is added here.
+            float cornerTerm = cornerSpd;
+            float cornerArrivalTerm = cornerArrival;
 
             // Route Speed Points on: the seeded per-section target IS the route term; off: the old term, untouched.
             float routeTerm = ARS.RouteSpeedPoints
@@ -2802,13 +2841,24 @@ const float RequirementLookaheadSeconds = 3.95f;
                 {
                     _cornerModeApexPassedAt = Game.GameTime;
                     _cornerSpeedAuthority = false;
-                    _apexRampActive = true;
-                    _apexRampFrom = _cornerModeSpeed;
-                    _apexRampStartMs = Game.GameTime;
+                    // The corner's held speed becomes the respected speed's own starting value, and the smoother —
+                    // already chasing the next speed point — climbs from it at its own rate. No blend, no clock, and
+                    // no step in either direction: a target below the held speed descends just as smoothly.
+                    // Speed points off means there is no smoother to seed (it only advances under that flag), so the
+                    // corner releases straight onto the curvature term and the handover is the step it always was.
+                    if (ARS.RouteSpeedPoints)
+                    {
+                        _routeSmooth.Value = _cornerModeSpeed;
+                        routeTerm = _routeSmooth.Value;
+                    }
                     ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": APEX corner #" + _cornerModeNode
                         + " passed, car " + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture)
                         + " m/s, held " + _cornerModeSpeed.ToString("0.0", CultureInfo.InvariantCulture)
-                        + " m/s, route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture) + " m/s");
+                        + " m/s, " + (ARS.RouteSpeedPoints
+                            ? "seeded route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture)
+                              + " chasing " + _routeSmooth.Target.ToString("0.0", CultureInfo.InvariantCulture)
+                            : "route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture))
+                        + " m/s");
                 }
 
                 if (_cornerModeNode < 0 || (_cornerModeApexPassedAt >= 0 && Game.GameTime - _cornerModeApexPassedAt >= CornerVerdictMs))
@@ -2824,15 +2874,13 @@ const float RequirementLookaheadSeconds = 3.95f;
                         ? _cornerModeSpeed
                         : Math.Max(2f, ApexBrakingSpeed(_cornerModeNode, _cornerModeSpeed));
                     cornerSourceNode = _cornerModeNode;
-                    cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
-                    cornerArrivalTerm = cornerArrival + ARS.MphToMps(ARS.CornerOffsetMph);
+                    cornerTerm = cornerSpd;
+                    cornerArrivalTerm = cornerArrival;
 
                     if (cornerTerm - ARS.GetForwardSpeed(Car) > CornerDeselectMps)
                         ExitCornerMode(routeTerm, "car fell well under the corner", false);
                 }
             }
-
-            float rampTerm = _apexRampActive ? ApexRampSpeed(routeTerm) : routeTerm;
 
             if (!_cornerSpeedAuthority && cornerSpd < 998f && cornerSourceNode >= 0
                 && cornerSourceNode != _cornerModeNode && cornerSpd < ARS.GetForwardSpeed(Car))
@@ -2842,7 +2890,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _speedCorner = cornerTerm;
             _speedCornerArrival = cornerArrivalTerm;
             _speedRoute = routeTerm;
-            Brain.CurrentIntention.Speed = _cornerSpeedAuthority ? cornerTerm : rampTerm;
+            Brain.CurrentIntention.Speed = _cornerSpeedAuthority ? cornerTerm : routeTerm;
             if (_cornerSpeedAuthority)
             {
                 Brain.CurrentIntention.Term = SpeedTerm.Corner;
@@ -2850,15 +2898,6 @@ const float RequirementLookaheadSeconds = 3.95f;
                 Brain.CurrentIntention.TermMetres = cornerSourceNode >= 0 ? SignedMetresToNode(cornerSourceNode) : 0f;
                 CornerPoint source = cornerSourceNode >= 0 ? ARS.Corners.Find(c => c.Node == cornerSourceNode) : null;
                 Brain.CurrentIntention.TermRadius = source != null ? source.DetectedRadius : 0f;
-            }
-            else if (_apexRampActive)
-            {
-
-                CornerPoint ramped = _cornerModeNode >= 0 ? ARS.Corners.Find(c => c.Node == _cornerModeNode) : null;
-                Brain.CurrentIntention.Term = SpeedTerm.CornerToRoute;
-                Brain.CurrentIntention.TermNode = _cornerModeNode;
-                Brain.CurrentIntention.TermMetres = _cornerModeNode >= 0 ? SignedMetresToNode(_cornerModeNode) : 0f;
-                Brain.CurrentIntention.TermRadius = ramped != null ? ramped.DetectedRadius : 0f;
             }
             else
             {

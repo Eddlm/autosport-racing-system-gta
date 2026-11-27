@@ -942,7 +942,7 @@ namespace ARS
             AddSub(rivalsMenu, rivalTractionMenu);
             AddSub(rivalsMenu, rivalSteeringMenu);
 
-            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Speed Offset (mph)", "Raises the speed rivals brake for at the next corner. Only the slower of this and Road Curvature Offset applies.", SettingsRepair.OptionsFor("CornerOffset"));
+            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Speed Offset (mph)", "Seeds the speed rivals dare to carry into every corner; each corner's learner moves it from there inside ±10 m/s. Only the slower of this and Road Curvature Offset applies.", SettingsRepair.OptionsFor("CornerOffset"));
             cornerOffsetItem.ItemChanged += (sender, args) =>
             {
                 CornerOffsetMph = int.Parse(cornerOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -971,7 +971,7 @@ namespace ARS
             };
             rivalPaceMenu.Add(brakeLearningItem);
 
-            NativeCheckboxItem cornerSpeedLearningItem = new NativeCheckboxItem("Corner Speed Learning", "Each corner learns how much speed rivals dare to carry through it: the learned number is an offset in m/s on the corner's target, starting at 0. Past the apex, while sliding past three quarters of the modelled peak slip, the pass keeps the least clearance between the car's outer side and that corner's outer road edge; more clearance raises the offset, less lowers it, at 0.66 m/s per metre. Off leaves the corner at pure grip physics.", CornerSpeedLearning);
+            NativeCheckboxItem cornerSpeedLearningItem = new NativeCheckboxItem("Corner Speed Learning", "Each corner learns how much speed rivals dare to carry through it: the learned number is an offset in m/s on the corner's target, starting at the Corner Speed Offset setting. Past the apex, while sliding past three quarters of the modelled peak slip, the pass keeps the least clearance between the car's outer side and that corner's outer road edge; more clearance raises the offset, less lowers it, at 0.5 m/s per metre. Off stops the learning and leaves every corner on the seeded offset.", CornerSpeedLearning);
             cornerSpeedLearningItem.CheckboxChanged += (sender, args) =>
             {
                 CornerSpeedLearning = cornerSpeedLearningItem.Checked;
@@ -3973,8 +3973,6 @@ namespace ARS
                     + " @" + Math.Round(racer.SpeedSourceMetres).ToString(CultureInfo.InvariantCulture) + "m"
                     + " (R" + Math.Round(racer.SpeedSourceRadius).ToString(CultureInfo.InvariantCulture) + ")";
             }
-            if (term == SpeedTerm.CornerToRoute)
-                return "corner-route (R" + Math.Round(racer.SpeedSourceRadius).ToString(CultureInfo.InvariantCulture) + ")";
             if (term == SpeedTerm.Route)
                 return "route (R" + Math.Round(racer.SpeedSourceRadius).ToString(CultureInfo.InvariantCulture) + ")";
             if (term == SpeedTerm.Standoff) return "standoff";
@@ -3991,8 +3989,7 @@ namespace ARS
             if (reason == ThrottleReason.Plan)
             {
 
-                if (term == SpeedTerm.CornerToRoute) label = "corner-route";
-                else if (wanted >= 0.995f) label = "full";
+                if (wanted >= 0.995f) label = "full";
                 else if (delta <= 0f) label = "over " + SpeedTermName(term);
                 else if (slew) label = "rising";
                 else label = "error " + delta.ToString("0.0", CultureInfo.InvariantCulture) + "/"
@@ -4013,7 +4010,6 @@ namespace ARS
             switch (term)
             {
                 case SpeedTerm.Corner: return "corner";
-                case SpeedTerm.CornerToRoute: return "corner-route";
                 case SpeedTerm.Route: return "route";
                 case SpeedTerm.Standoff: return "standoff";
                 case SpeedTerm.Chicane: return "chicane";

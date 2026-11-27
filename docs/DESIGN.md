@@ -191,17 +191,20 @@ lap's: corners beyond the last corner are ignored until that apex has passed, so
 next lap's first corner cannot skip the last corner of the one being driven. Where the plan does have a number,
 that number stands: it already accounts for the braking the car needs.
 
-**Past the apex the corner hands the speed back on a slope, not a step.** The route term reads the tightest
-radius in a 1-2 s band ahead, so just past the apex that band still spans the corner and the route term sits at
-its tightest — handing back at the apex without a ramp would step the speed down on every exit, and the band
-can just as well sit above the held speed, so a flat handover would step it up instead. The held speed ramps
-into the live route term over one second (`ApexRampMs`), with the ramp's value at its start the held speed
-itself; while it runs the term reads `SpeedTerm.CornerToRoute`, so neither pure term owns the car and the
-route-speed learner, which reads only the pure route term, cannot learn off a blend. The corner state outlives
-the speed on purpose: two seconds past the apex (`CornerVerdictMs`) the verdict window closes and the corner's
-verdict commits. The flat hold it replaced — `CornerModePostApexHoldMs`, the three quarters of a second of
-build 1969 — released the route in one step; fifteen metres was the earlier rule, and it bunched the release on
-fast sweepers.
+**Past the apex the corner hands the speed back through the smoother, not on a ramp of its own.** The route term
+reads the tightest radius in a 1-2 s band ahead, so just past the apex that band still spans the corner and the
+route term sits at its tightest — handing back at the apex with no preparation would step the speed down on every
+exit, and the band can just as well sit above the held speed, so a bare handover would step it up instead. The
+smoother that already shapes the route term (`SmoothFloat`, `RouteSmoothRate` 3) is given the work: on the apex tick
+the corner's held speed is written into the smoother's *value* and the smoother's target stays the per-section speed
+target it is already chasing, so the respected speed leaves the corner from exactly the number the car was holding
+and chases the next section at the smoother's own rate. No blend, no clock, and no second term: the handover is a
+step of zero in either direction, which is what the deleted one-second `ApexRampMs` blend and its
+`SpeedTerm.CornerToRoute` label used to buy. The corner state outlives the speed on purpose: two seconds past the
+apex (`CornerVerdictMs`) the verdict window closes and the corner's verdict commits. The flat hold it replaced —
+`CornerModePostApexHoldMs`, the three quarters of a second of build 1969 — released the route in one step; fifteen
+metres was the earlier rule, and it bunched the release on fast sweepers. With Route Speed Points off there is no
+smoother to seed, and the release is a plain step onto the curvature term.
 
 **The road's own shape corrects both terms.** A hill takes grip from both — the route term at the follow
 point, the corner at its apex inside its braking map, where its grade enters as a deceleration change rather
@@ -231,11 +234,17 @@ is exactly what a ramp is for, and nothing else is.
 **The point of the system is anticipation done honestly: the speed the car should be carrying, stated for the
 ground ahead of it, with the physics on record instead of hidden inside a limiter.** With the `Route Speed
 Points` switch on, the route term is no longer the physics base plus a scalar offset: it *is* a chain of
-per-section targets. Every 40th node seeds unconditionally — no radius gate, so all track is covered — and each
+per-section targets. Every 40th node seeds a lattice — no radius gate, so all track is covered — and each apex then
+pulls its two nearest lattice points onto the cadence either side of itself (`apex ± 40`), so every corner is
+flanked identically whatever phase the lattice landed on; without that, the first exit point sat anywhere from 0 to
+39 nodes past an apex and each corner released differently. Each
 baked target carries three layers: the apex-speed root `√(grip·g·r)` from the **tightest swept radius within
 half the seed spacing** (the worst nearby ground; the downhill bake uses the same worst-nearby lookup), the
-**rise exponent** above the 100 m cap radius, and the **downhill damping**. Nothing prunes except a detected
-corner apex within reach — corner ground is handed to the corner system, everything else is the route's.
+**rise exponent** above the 100 m cap radius, and the **downhill damping**. Nothing prunes any more: every seed
+survives, and the apex is a boundary the sweep may not cross instead — a point past a corner reads only ahead of
+itself, one before it only behind, exactly the window the apex would otherwise eat (`ApexWindowClamp`). A point
+boxed between two apexes keeps its own node alone. Corner ground is therefore still the corner's, but the road a
+point stands on always keeps a number, where the old ±21-node prune deleted the point and left that road bare.
 
 Why the exponent exists: the tyre root says speed grows with the square root of radius, and on wide sweepers
 that over-asks — the car cannot chase `√r` into a bend it slides out of. `RouteSpeedRiseExponent` dials the
@@ -244,7 +253,8 @@ ratio of radius to speed rise: 0.5 is the tyre root's own steps, 0 is flat, and 
 radius anchors the pure physics below it; the number is the knob and every floor value moves with it.
 
 Why the downhill is baked and the crest is not: a descent feeds the car gravitational energy exactly where the
-route asks it to turn, and a radius cannot see a hill. The bake scans the same ±half-spacing window, takes the
+route asks it to turn, and a radius cannot see a hill. The bake scans the same ±half-spacing window — clamped by the
+same apex boundary — takes the
 **steepest descent in the direction of travel**, and damps through the same hill law the old term carried —
 `√factor`, halving every 15°, floored at −29%. Uphill never raises the target, and the crest is kept out on
 purpose: a crest takes grip a moment late, which is a timing problem, and belongs to the term that sees the
@@ -593,7 +603,7 @@ cannot know what the surface under the wheels is really offering at that moment,
 only thing that decides the stop. So the design cannot answer "how hard do I brake here" from theory, and
 it does not pretend to.
 
-**What it does instead.** It uses a deliberately simple one-dimensional correction. Each corner keeps its own brake factor; fresh corners seed at `0.75`, learn against a `0.33–1.30` clamp, and the shared hard-coded `Racer.BrakeRampIdealDeltaMps` (`0.5 m/s` over target) is treated as ideal. At the fixed ramp-end node the car reads its signed speed error against the corner’s commanded arrival speed. Every miss from that ideal moves the factor by one fiftieth of the error in the direction that closes it: hot arrivals brake earlier next pass, slow arrivals allow a later brake point. Nothing is shared between corners, and corners the plan did not ask to brake are not adjusted. It is not a model of the tyre; it is a bounded calibration of the one place the model is deliberately weakest. The same shape recurs wherever the model is the weak part: TCS reads the wheels rather than believing the plan. It was tried on the steering ceiling too — taking the lower of the model law and a measured slip allowance — and that one read slower swerves and was parked, which is why the ceiling today is the model law with a geometry fallback and the parked law is cited here as a shape rather than as a live consumer.
+**What it does instead.** It uses a deliberately simple one-dimensional correction. Each corner keeps its own brake factor; fresh corners seed at `0.6` (his tuned value — the constant is `CornerContext.BrakeFactorSeed`, one owner for the initialiser, both construction sites and the fallback), learn against a `0.33–1.30` clamp, and the shared hard-coded `Racer.BrakeRampIdealDeltaMps` (`0.5 m/s` over target) is treated as ideal. At the fixed ramp-end node the car reads its signed speed error against the corner’s commanded arrival speed. Every miss from that ideal moves the factor by one fiftieth of the error in the direction that closes it: hot arrivals brake earlier next pass, slow arrivals allow a later brake point. Nothing is shared between corners, and corners the plan did not ask to brake are not adjusted. It is not a model of the tyre; it is a bounded calibration of the one place the model is deliberately weakest. The same shape recurs wherever the model is the weak part: TCS reads the wheels rather than believing the plan. It was tried on the steering ceiling too — taking the lower of the model law and a measured slip allowance — and that one read slower swerves and was parked, which is why the ceiling today is the model law with a geometry fallback and the parked law is cited here as a shape rather than as a live consumer.
 
 **Three buckets, sorted by staleness.** Everything the car acts on sorts by whether the truth goes stale,
 and by how fast. An unknown that never changes is *known* and precomputed — where the corners are, how they
