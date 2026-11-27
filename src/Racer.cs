@@ -357,6 +357,12 @@ namespace ARS
         int _projectionLogAtMs = 0;
         const float BrakeFactorMin = 0.33f;
         const float BrakeFactorMax = 1.30f;
+        // A factor rise means the car arrived under the commanded speed, so the corner's lead is longer than its
+        // decel needs: the aim node steps toward the apex and the ramp ends later. One direction only - the factor
+        // owns the other correction, so the two knobs cannot both lengthen the window.
+        const float BrakeBufferStepNodes = 5f;
+        const float BrakeBufferMinNodes = 1f;
+        const float BrakeBufferMaxNodes = 30f;
         public const float BrakeRampIdealDeltaMps = 0.5f;
         const float BrakeRampErrorDivisor = 20f;
         const float CornerTightRadiusMetres = 50f;
@@ -2377,6 +2383,13 @@ const float RequirementLookaheadSeconds = 3.95f;
             float after = ARS.Clamp(before + (BrakeRampIdealDeltaMps - delta) / BrakeRampErrorDivisor,
                 BrakeFactorMin, BrakeFactorMax);
             context.BrakeFactor = after;
+            string bufferText = string.Empty;
+            if (after > before + 0.0005f && context.ApexSpeedBuffer > BrakeBufferMinNodes)
+            {
+                context.ApexSpeedBuffer = ARS.Clamp(context.ApexSpeedBuffer - BrakeBufferStepNodes,
+                    BrakeBufferMinNodes, BrakeBufferMaxNodes);
+                bufferText = " · buffer -> " + Math.Round(context.ApexSpeedBuffer).ToString(CultureInfo.InvariantCulture) + " nodes";
+            }
             string deltaText = (delta >= 0f ? "+" : string.Empty) + delta.ToString("0.0", CultureInfo.InvariantCulture);
             string factorText = Math.Abs(after - before) < 0.0005f
                 ? "factor " + after.ToString("0.00", CultureInfo.InvariantCulture) + " holds"
@@ -2384,7 +2397,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             string brakeReason = deltaText + " m/s";
             if (delta > 0f) brakeReason = "~r~" + brakeReason + "~w~";
-            AnnounceBrakeRamp(CornerId(apex) + " · " + deltaText + " m/s vs target · " + factorText,
+            AnnounceBrakeRamp(CornerId(apex) + " · " + deltaText + " m/s vs target · " + factorText + bufferText,
                 brakeReason + " - " + after.ToString("0.00", CultureInfo.InvariantCulture));
         }
 
@@ -2637,32 +2650,21 @@ const float RequirementLookaheadSeconds = 3.95f;
             return corner.EndNode >= 0 ? corner.EndNode : OffsetCornerNode(corner.Node, corner.ExitNodes);
         }
 
-        const float BrakeRampTargetLeadMetres = 15f;
-
-        float TrackDistanceBehind(int fromNode, int toNode)
-        {
-            if (fromNode < 0 || fromNode >= ARS.TrackPoints.Count || toNode < 0 || toNode >= ARS.TrackPoints.Count) return 0f;
-            float behind = ARS.TrackPoints[fromNode].CumulativeDistance - ARS.TrackPoints[toNode].CumulativeDistance;
-            if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && behind < 0f) behind += ARS.RouteLengthMeters;
-            return behind;
-        }
-
+        // The ramp's aim node, in nodes behind the apex: the corner's own buffer, so the ramp and the learner that
+        // grades it always read the same node — and the learner can move it once its brake factor has settled.
         int BrakeAimNode(int apexNode)
         {
             int count = ARS.TrackPoints.Count;
             if (apexNode < 0 || apexNode >= count || count == 0) return -1;
-            if (ARS.IsPointToPoint)
-            {
-                for (int node = apexNode - 1; node >= 0; node--)
-                    if (TrackDistanceBehind(apexNode, node) >= BrakeRampTargetLeadMetres) return node;
-                return 0;
-            }
-            for (int step = 1; step < count; step++)
-            {
-                int node = (apexNode - step + count) % count;
-                if (TrackDistanceBehind(apexNode, node) >= BrakeRampTargetLeadMetres) return node;
-            }
-            return apexNode;
+            float buffer = TryGetCornerContext(apexNode, out CornerContext context)
+                ? context.ApexSpeedBuffer
+                : CornerContext.ApexSpeedBufferSeed;
+            int back = (int)Math.Round(buffer);
+            if (back < 1) back = 1;
+            if (back >= count) back = count - 1;
+            return ARS.IsPointToPoint
+                ? Math.Max(0, apexNode - back)
+                : ((apexNode - back) % count + count) % count;
         }
 
         int BrakeTargetBaseNode(int apexNode, int fallbackNode)

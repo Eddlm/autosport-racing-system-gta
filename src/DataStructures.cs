@@ -429,8 +429,12 @@ namespace ARS
     {
         // The seed every initialiser and fallback derives from: one value owns all of them.
         public const float BrakeFactorSeed = 0.6f;
+        // Where the ramp aims to have arrived at corner speed, in nodes behind the apex. The brake factor learner
+        // settles the aggression first; once it stops moving, this one moves the window earlier or later.
+        public const float ApexSpeedBufferSeed = 15f;
         public CornerPoint Point;
         public float BrakeFactor = BrakeFactorSeed;
+        public float ApexSpeedBuffer = ApexSpeedBufferSeed;
         // The menu's Corner Speed Offset is where every corner STARTS, not a second additive layered on the
         // learned value: one seed for all of them, and the corner speed learner moves each from there.
         public static float SeedSpeedOffsetMps => ARS.MphToMps(ARS.CornerOffsetMph);
