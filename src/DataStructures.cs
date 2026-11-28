@@ -1,4 +1,4 @@
-// Shared types: constants, vehicle state, racer brain, route speed points.
+// Shared types: constants, vehicle state, racer brain.
 using GTA.Math;
 using System;
 using System.Collections.Generic;

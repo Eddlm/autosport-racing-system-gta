@@ -179,8 +179,6 @@ namespace ARS
             if (trackPoints.Count == 0) return;
             if (racer.LiveRouteCrestNode >= 0 && racer.LiveRouteCrestNode < trackPoints.Count)
                 DrawTrackCrossingLine(trackPoints, racer.LiveRouteCrestNode, Color.FromArgb(200, 80, 160, 255));
-            if (racer.LiveRouteCrestFarNode >= 0 && racer.LiveRouteCrestFarNode < trackPoints.Count)
-                DrawTrackCrossingLine(trackPoints, racer.LiveRouteCrestFarNode, Color.FromArgb(220, 255, 60, 60));
         }
 
         public static void DrawCrestLookahead(Racer racer, List<TrackPoint> trackPoints)

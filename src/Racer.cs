@@ -1,4 +1,4 @@
-// One racer's laws: brake plan, corner authority, route speed points, lane and learner.
+// One racer's laws: brake plan, corner authority, the route window, lane and the learner.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -82,7 +82,6 @@ namespace ARS
         int _lapStartNode = -1;
         int _lapStartOdometer = 0;
         public int LiveRouteCrestNode = -1;
-        public int LiveRouteCrestFarNode = -1;
         public int LiveRouteRadiusNearNode = -1;
         public int LiveRouteRadiusMidNode = -1;
         public int LiveRouteRadiusFarNode = -1;
@@ -92,7 +91,7 @@ namespace ARS
         public float LiveSlidRadius = -1f;
         public float LiveRouteRadius = -1f;
         public float LiveRouteDownhill = 1f;
-        public enum LookAhead { SteerRef, OneSec };
+        public enum LookAhead { SteerRef };
         public Dictionary<LookAhead, TrackPoint> LookAheads = new Dictionary<LookAhead, TrackPoint>();
 
         public List<TimeSpan> LapTimes = new List<TimeSpan>();
@@ -2617,7 +2616,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             float crestCeiling = CrestSpeedCeiling(carNode, out int crestNode);
 
             LiveRouteCrestNode = crestNode;
-            LiveRouteCrestFarNode = -1;
             if (crestCeiling < followTrackSpd) followTrackSpd = crestCeiling;
 
             if (chicane) followTrackSpd += ARS.MphToMps(10f);
@@ -4211,7 +4209,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             AlongTrackSpeed = Vector3.Dot(velocity, CurrentTrackPoint.Direction);
 
             int steerRef = (int)SteerLookaheadNodes(speed);
-            int oneSec = (int)(speed);
 
             TrackPoint ResolveLookAhead(int offset)
             {
@@ -4221,7 +4218,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
             LookAheads[LookAhead.SteerRef] = ResolveLookAhead(steerRef);
-            LookAheads[LookAhead.OneSec] = ResolveLookAhead(oneSec);
 
             int nodeCount = ARS.TrackPoints.Count;
             int currentNode = CurrentTrackPoint.Node;
