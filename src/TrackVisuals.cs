@@ -160,8 +160,6 @@ namespace ARS
             DrawCrestDipMarkers(point => point.Position.DistanceTo2D(center) <= radiusMeters, crestRegions, dipPeaks, trackPoints);
         }
 
-        // One mark per feature: a crest mark on every region's peak, a dip mark on every dip run's tightest node. The
-        // filter is the window (racer view) or the radius (spectator view).
         static void DrawCrestDipMarkers(Func<TrackPoint, bool> include, List<CrestRegion> crestRegions, List<int> dipPeaks, List<TrackPoint> trackPoints)
         {
             if (trackPoints.Count == 0) return;

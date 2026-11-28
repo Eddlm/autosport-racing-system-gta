@@ -2406,7 +2406,6 @@ const float RequirementLookaheadSeconds = 3.95f;
                 + heldSpeed.ToString("0.0", CultureInfo.InvariantCulture) + " m/s");
         }
 
-        // `judge: false` is the early release: the corner stopped asking for a lift before its apex.
         void ExitCornerMode(float routeTerm, string why, bool judge = true)
         {
             if (!_cornerMode) return;
@@ -3694,8 +3693,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             ARS.DrawText(pos, text, Color.White, 0.5f);
         }
 
-        // Learner rules: the fall is the wash-out; the rise needs route demand under the full-throttle line,
-        // the projection nearer the inside than the car, a slide worth a fifth of the peak and an uncut cap.
         void UpdateRouteSpeedLearning()
         {
             float step = RouteSpeedLearnRateMph * TickScale;

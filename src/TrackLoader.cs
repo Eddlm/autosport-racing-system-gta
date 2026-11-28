@@ -1220,7 +1220,6 @@ namespace ARS
             });
         }
 
-        // The dip run's strongest node — same rule as the crest region's peak, mirrored to the negative sign.
         static void AddDipPeak(int firstNode, int lastNode, int count)
         {
             int peak = -1;
@@ -1240,7 +1239,6 @@ namespace ARS
             if (peak >= 0) ARS.DipPeaks.Add(peak);
         }
 
-        // The table: one line per crest, tightest first, capped so a lap with two hundred of them stays readable.
         static void LogCrestRegions()
         {
             if (ARS.LogLevel > ARS.LogImportance.Info) return;
