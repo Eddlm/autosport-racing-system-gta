@@ -366,6 +366,9 @@ namespace ARS
         const float BrakeBufferStepNodes = 5f;
         const float BrakeBufferMinNodes = 1f;
         const float BrakeBufferMaxNodes = 30f;
+        // A big miss moves the dial one notch at a time: without the cap, a deep overshoot swings the factor half a
+        // notch at once and the next pass overcorrects. Binding begins at delta > 2.5 or < -1.5 m/s.
+        const float BrakeFactorStepLimit = 0.1f;
         public const float BrakeRampIdealDeltaMps = 0.5f;
         const float BrakeRampErrorDivisor = 20f;
         const float CornerTightRadiusMetres = 50f;
@@ -2191,7 +2194,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             float delta = ARS.GetForwardSpeed(Car) - targetSpeed;
             CornerContext context = CornerContextForWrite(apex);
             float before = context.BrakeFactor;
-            float after = ARS.Clamp(before + (BrakeRampIdealDeltaMps - delta) / BrakeRampErrorDivisor,
+            float rawStep = (BrakeRampIdealDeltaMps - delta) / BrakeRampErrorDivisor;
+            float step = ARS.Clamp(rawStep, -BrakeFactorStepLimit, BrakeFactorStepLimit);
+            string stepText = step != rawStep ? " · step capped" : string.Empty;
+            float after = ARS.Clamp(before + step,
                 BrakeFactorMin, BrakeFactorMax);
             context.BrakeFactor = after;
             string bufferText = string.Empty;
@@ -2208,7 +2214,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             string brakeReason = deltaText + " m/s";
             if (delta > 0f) brakeReason = "~r~" + brakeReason + "~w~";
-            AnnounceBrakeRamp(CornerId(apex) + " · " + deltaText + " m/s vs target · " + factorText + bufferText,
+            AnnounceBrakeRamp(CornerId(apex) + " · " + deltaText + " m/s vs target · " + factorText + bufferText + stepText,
                 brakeReason + " - " + after.ToString("0.00", CultureInfo.InvariantCulture));
         }
 
