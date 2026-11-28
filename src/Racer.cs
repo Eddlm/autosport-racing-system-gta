@@ -360,6 +360,9 @@ namespace ARS
         // A factor rise means the car arrived under the commanded speed, so the corner's lead is longer than its
         // decel needs: the aim node steps toward the apex and the ramp ends later. One direction only - the factor
         // owns the other correction, so the two knobs cannot both lengthen the window.
+        // The ApexSpeedBuffer stepping parks while the front-slip trim settles (2026-11-28): the ramp's aim holds its
+        // node, the seed-15 standby stays the only guarantee, and the -5 closes return by flipping this to true.
+        const bool BrakeBufferSteppingEnabled = false;
         const float BrakeBufferStepNodes = 5f;
         const float BrakeBufferMinNodes = 1f;
         const float BrakeBufferMaxNodes = 30f;
@@ -2192,7 +2195,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 BrakeFactorMin, BrakeFactorMax);
             context.BrakeFactor = after;
             string bufferText = string.Empty;
-            if (after > before + 0.0005f && context.ApexSpeedBuffer > BrakeBufferMinNodes)
+            if (BrakeBufferSteppingEnabled && after > before + 0.0005f && context.ApexSpeedBuffer > BrakeBufferMinNodes)
             {
                 context.ApexSpeedBuffer = ARS.Clamp(context.ApexSpeedBuffer - BrakeBufferStepNodes,
                     BrakeBufferMinNodes, BrakeBufferMaxNodes);
