@@ -211,9 +211,11 @@ point, the corner at its apex inside its braking map, where its grade enters as 
 than a speed factor. The crest is a ceiling in both places: on the route from the strictest crest region overlapping
 a two-second window ahead of the car, and on the corner from the crest standing on the apex itself, read straight from
 the field, because that is where the tyre needs its normal load most and a braking ramp pointed at the ceiling will
-brake for it. A corner whose apex is crest-capped teaches its learner nothing — the pass measured the crest, not the
-corner — so it voids the verdict instead of crediting the corner with a clean line. A chicane is the one automatic
-relaxation: both terms get a boost, because a flick is not a corner in the sense the geometry takes it for.
+brake for it. A corner whose apex is crest-capped teaches its learner nothing about its own limit — the pass measured
+the crest, not the corner — so the clearance verdict is voided instead of crediting the corner with a clean line. A
+pass that also made contact still deducts: contact is measured directly, clearance is inferred, and only the inferred
+one is spoiled by the crest. A chicane is the one automatic relaxation: both terms get a boost, because a flick is not
+a corner in the sense the geometry takes it for.
 
 **Every node carries its vertical shape, the way it carries its horizontal one.** `TrackPoint.CrestRadius` is the
 signed radius through that node's own neighbour sample (`CrestSampleNodes`), crest positive, zero where the road runs
@@ -260,9 +262,9 @@ is exactly what a ramp is for, and nothing else is.
 **The route term is a measurement of the road ahead, taken fresh every tick, not a table about it.** The car slides a
 window forward with itself: the tightest `SweepCurveRadius` between it and the window's far end wins — the lowest
 speed wins, because `RouteIdealSpeedForRadius` is monotone in radius — and that one radius, through the law and the
-surface grip, becomes `followTrackSpd`. Two windows are sampled and the tighter wins: the anchored one ending
-`RouteRadiusFarEndSeconds` ahead, and one slid by `Slid Radius Lead` — the same one-second span, moved along the road,
-so 1.0 s sits at the car and 2.0 s looks a second ahead. The span is a second of travel; the end is `v · endSeconds`, so the horizon is in time, not in metres.
+surface grip, becomes `followTrackSpd`. With `Route Radius` on, an anchored window ending `RouteRadiusFarEndSeconds`
+ahead is sampled as well and the tighter of the two wins; off — the shipped default — the slid window walks alone, one
+second of road moved along by `Slid Radius Lead`, so 1.0 s sits at the car and 2.0 s looks a second ahead. The span is a second of travel; the end is `v · endSeconds`, so the horizon is in time, not in metres.
 
 **Why no table (build 2119, his call).** The per-section chain that came before it — builds 2087-2118, every 40th
 node carrying one baked speed — was right in law and wrong in phase: a corner's exit number depended on where the
