@@ -896,8 +896,7 @@ namespace ARS
                 corner.ExitNodes = Math.Max(0, span - corner.EntranceNodes);
             }
 
-            AssignCrests(nodeCount);
-            BuildCrestRegions(nodeCount);
+            BuildVerticalFeatures(nodeCount);
             AssignBumpNodes(nodeCount);
             MoveEntrancesForFeatures(nodeCount);
             BuildLaneField(nodeCount);
@@ -1022,12 +1021,11 @@ namespace ARS
                     if (behind <= 0 || behind > FeatureEntranceSearchNodes) continue;
                     if (behind > farthestBehind) { farthestBehind = behind; featureNode = bump.LipNode; featureKind = "bump"; }
                 }
-                foreach (Crest crest in ARS.Crests)
+                foreach (CrestRegion region in ARS.CrestRegions)
                 {
-                    if (crest.Type != CrestDipType.Crest || crest.Node < 0) continue;
-                    int behind = ARS.IsPointToPoint ? corner.StartNode - crest.Node : Wrap(corner.StartNode - crest.Node, count);
+                    int behind = ARS.IsPointToPoint ? corner.StartNode - region.PeakNode : Wrap(corner.StartNode - region.PeakNode, count);
                     if (behind <= 0 || behind > FeatureEntranceSearchNodes) continue;
-                    if (behind > farthestBehind) { farthestBehind = behind; featureNode = crest.Node; featureKind = "crest"; }
+                    if (behind > farthestBehind) { farthestBehind = behind; featureNode = region.PeakNode; featureKind = "crest"; }
                 }
                 if (featureNode < 0) continue;
 
@@ -1124,80 +1122,48 @@ namespace ARS
             return (float)Math.Sqrt(dx * dx + dy * dy);
         }
 
-        static void AssignCrests(int count)
-        {
-            const int window = 6;
-            const int skipAfterPeak = 5;
-
-            ARS.Crests.Clear();
-            for (int node = 0; node < count; node++)
-            {
-                if (!TryResolveNode(node - window, count, out int before)) continue;
-                if (!TryResolveNode(node + window, count, out int after)) continue;
-                if (after == before) continue;
-
-                float gradeBefore = ARS.LocalSlope(ARS.TrackPoints[before].Position, ARS.TrackPoints[node].Position);
-                float gradeAfter = ARS.LocalSlope(ARS.TrackPoints[node].Position, ARS.TrackPoints[after].Position);
-
-                CrestDipType type;
-                if (gradeBefore > 0f && gradeAfter < 0f) type = CrestDipType.Crest;
-                else if (gradeBefore < 0f && gradeAfter > 0f) type = CrestDipType.Dip;
-                else continue;
-
-                float gsAt100 = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[node].Position, ARS.TrackPoints[after].Position, 45f);
-                float gsMag = Math.Abs(gsAt100);
-
-                if (gsMag < 1f) { node += skipAfterPeak; continue; }
-
-                ARS.Crests.Add(new Crest { Node = node, Type = type, GsAt100Mph = gsMag });
-
-                node += skipAfterPeak;
-            }
-
-            int crests = 0, dips = 0;
-            foreach (Crest c in ARS.Crests)
-            {
-                if (c.Type == CrestDipType.Crest) crests++; else dips++;
-                ARS.Log(ARS.LogImportance.Info, (c.Type == CrestDipType.Crest ? "Crest" : "Dip") + " node=" + c.Node + " gs@100mph=" + c.GsAt100Mph.ToString("0.00"));
-            }
-            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips (sign change in local grade over " + window + "-node sample, gs at 100mph)");
-        }
-
-        // The crest as a feature, walked as contiguous runs of crest-signed nodes. Reads only TrackPoint.CrestDipRadius,
-        // so it is the field's projection rather than a second detector.
-        static void BuildCrestRegions(int count)
+        // The crest and the dip as features, walked as contiguous stretches of signed vertical curvature: a crest run is
+        // nodes with a positive CrestDipRadius, a dip run negative. Reads only TrackPoint.CrestDipRadius, so both are the
+        // field's projections rather than a second detector. A crest run becomes a region with its tightest radius; a dip
+        // run publishes its tightest node on DipPeaks, which the track's dip markers read.
+        static void BuildVerticalFeatures(int count)
         {
             ARS.CrestRegions.Clear();
+            ARS.DipPeaks.Clear();
             if (count < 3) return;
 
             if (ARS.IsPointToPoint)
             {
-                int runStart = -1;
-                int runEnd = -1;
-                for (int node = 0; node < count; node++)
-                {
-                    if (ARS.TrackPoints[node].CrestDipRadius > 0f)
-                    {
-                        if (runStart < 0) runStart = node;
-                        runEnd = node;
-                    }
-                    else if (runStart >= 0)
-                    {
-                        AddCrestRegion(runStart, runEnd, count);
-                        runStart = -1;
-                        runEnd = -1;
-                    }
-                }
-                if (runStart >= 0) AddCrestRegion(runStart, runEnd, count);
+                CollectRuns(count, true, (first, last) => AddCrestRegion(first, last, count));
+                CollectRuns(count, false, (first, last) => AddDipPeak(first, last, count));
                 return;
             }
 
-            // A closed route has no natural start: begin at the first node that is not crest-signed, so a run crossing
-            // the index seam stays one crest instead of two.
+            CollectClosedRuns(count, true, (first, last) => AddCrestRegion(first, last, count));
+            CollectClosedRuns(count, false, (first, last) => AddDipPeak(first, last, count));
+        }
+
+        static void CollectRuns(int count, bool cresting, Action<int, int> onRun)
+        {
+            int begin = -1;
+            int end = -1;
+            for (int node = 0; node < count; node++)
+            {
+                if (RunSigned(cresting, node)) { if (begin < 0) begin = node; end = node; }
+                else if (begin >= 0) { onRun(begin, end); begin = -1; }
+            }
+            if (begin >= 0) onRun(begin, end);
+        }
+
+        static void CollectClosedRuns(int count, bool cresting, Action<int, int> onRun)
+        {
+            // A closed route has no natural start: begin at the first node that is not signed this way, so a run crossing
+            // the index seam stays one feature instead of two.
             int start = -1;
             for (int node = 0; node < count; node++)
             {
-                if (ARS.TrackPoints[node].CrestDipRadius <= 0f) { start = node; break; }
+                float radius = ARS.TrackPoints[node].CrestDipRadius;
+                if (cresting ? radius <= 0f : radius >= 0f) { start = node; break; }
             }
             if (start < 0) return;
 
@@ -1206,17 +1172,15 @@ namespace ARS
             for (int step = 1; step <= count; step++)
             {
                 int node = Wrap(start + step, count);
-                if (ARS.TrackPoints[node].CrestDipRadius > 0f)
-                {
-                    if (begin < 0) begin = node;
-                    end = node;
-                }
-                else if (begin >= 0)
-                {
-                    AddCrestRegion(begin, end, count);
-                    begin = -1;
-                }
+                if (RunSigned(cresting, node)) { if (begin < 0) begin = node; end = node; }
+                else if (begin >= 0) { onRun(begin, end); begin = -1; }
             }
+        }
+
+        static bool RunSigned(bool cresting, int node)
+        {
+            float radius = ARS.TrackPoints[node].CrestDipRadius;
+            return cresting ? radius > 0f : radius < 0f;
         }
 
         static void AddCrestRegion(int firstNode, int lastNode, int count)
@@ -1254,6 +1218,26 @@ namespace ARS
                 LengthMeters = length,
                 Radius = radius,
             });
+        }
+
+        // The dip run's strongest node — same rule as the crest region's peak, mirrored to the negative sign.
+        static void AddDipPeak(int firstNode, int lastNode, int count)
+        {
+            int peak = -1;
+            float radius = float.MaxValue;
+            int node = firstNode;
+            for (int step = 0; step < count; step++)
+            {
+                float dipRadius = ARS.TrackPoints[node].CrestDipRadius;
+                if (dipRadius < 0f && dipRadius < radius) { radius = dipRadius; peak = node; }
+                if (node == lastNode) break;
+
+                int next = ARS.IsPointToPoint ? Math.Min(node + 1, count - 1) : Wrap(node + 1, count);
+                if (next == node) break;
+                node = next;
+            }
+
+            if (peak >= 0) ARS.DipPeaks.Add(peak);
         }
 
         // The table: one line per crest, tightest first, capped so a lap with two hundred of them stays readable.

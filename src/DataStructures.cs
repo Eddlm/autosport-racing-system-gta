@@ -407,15 +407,6 @@ namespace ARS
         public float LipCrestRadius = 0f;   // vertical radius at the lip, metres: the onset rung over the grade drop
     }
 
-    public enum CrestDipType { Crest, Dip }
-    public class Crest
-    {
-        public int Node = -1;
-        public CrestDipType Type = CrestDipType.Crest;
-
-        public float GsAt100Mph = 0f;
-    }
-
     // A crest as a feature: one contiguous stretch of crest-signed nodes with its peak, its extent and the radius that
     // peak reads. Static per track — nothing here depends on the car — and derived from TrackPoint.CrestDipRadius, so
     // elevation still has one author. LengthMeters spans FirstNode to LastNode (the hop out of the region is not

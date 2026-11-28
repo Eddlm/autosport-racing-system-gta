@@ -49,8 +49,8 @@ namespace ARS
         public const int CornerCeilingMeters = 150;
 
         public static List<Bump> Bumps = new List<Bump>();
-        public static List<Crest> Crests = new List<Crest>();
         public static List<CrestRegion> CrestRegions = new List<CrestRegion>();
+        public static List<int> DipPeaks = new List<int>();   // tightest node of each dip run, for the track markers
 
         public static List<string> KnownTracks = new List<string>();
 
@@ -2238,9 +2238,9 @@ namespace ARS
                             TrackVisuals.DrawCornerRegions(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Corners, ARS.TrackPoints);
 
                         if (PlayerRacer != null)
-                            TrackVisuals.DrawCrests(PlayerRacer, ARS.Crests, ARS.TrackPoints);
+                            TrackVisuals.DrawCrests(PlayerRacer, ARS.CrestRegions, ARS.DipPeaks, ARS.TrackPoints);
                         else if (raceLive)
-                            TrackVisuals.DrawCrests(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Crests, ARS.TrackPoints);
+                            TrackVisuals.DrawCrests(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.CrestRegions, ARS.DipPeaks, ARS.TrackPoints);
                     }
 
                     if (DebugFocusRacer != null)
@@ -3136,29 +3136,6 @@ namespace ARS
             int firstAhead = (region.FirstNode - carNode + count) % count;
             int lastAhead = (region.LastNode - carNode + count) % count;
             return firstAhead > lastAhead || firstAhead <= span;
-        }
-
-        public static float HillGripDeltaGs(Vector3 start, Vector3 midpoint, Vector3 end, float velocity)
-        {
-            if (velocity <= 0f) return 0f;
-
-            float curvature = CrestCurvature(start, midpoint, end);
-            if (curvature == 0f) return 0f;
-
-            const float Gravity = 9.8f;
-            float deltaGs = -((velocity * velocity) * curvature) / Gravity;
-
-            if (float.IsNaN(deltaGs) || float.IsInfinity(deltaGs)) return 0f;
-            return deltaGs;
-        }
-
-        public static float LocalSlope(Vector3 a, Vector3 b)
-        {
-            float dx = b.X - a.X;
-            float dy = b.Y - a.Y;
-            float ground = (float)Math.Sqrt(dx * dx + dy * dy);
-            if (ground < 0.001f) return 0f;
-            return (b.Z - a.Z) / ground;
         }
 
         public static float GetHillGsLossAtCurrentTrackPoint(Racer r)

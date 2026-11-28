@@ -143,34 +143,42 @@ namespace ARS
             }
         }
 
-        public static void DrawCrests(Racer player, List<Crest> crests, List<TrackPoint> trackPoints)
+        public static void DrawCrests(Racer player, List<CrestRegion> crestRegions, List<int> dipPeaks, List<TrackPoint> trackPoints)
         {
-            if (crests.Count == 0 || trackPoints.Count == 0) return;
+            if (trackPoints.Count == 0) return;
             int centreNode = player.CurrentTrackPoint.Node;
-
-            for (int i = 0; i < crests.Count; i++)
+            int count = trackPoints.Count;
+            DrawCrestDipMarkers(point =>
             {
-                Crest c = crests[i];
-                if (c.Node < 0 || c.Node >= trackPoints.Count) continue;
-
-                int delta = ARS.IsPointToPoint ? c.Node - centreNode : ((c.Node - centreNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
-                if (!ARS.IsBetween(delta, -10, 400)) continue;
-
-                Color peakLineColor = c.Type == CrestDipType.Crest ? CrestLineColor : DipLineColor;
-                DrawTrackCrossingLine(trackPoints, c.Node, peakLineColor);
-            }
+                int delta = ARS.IsPointToPoint ? point.Node - centreNode : ((point.Node - centreNode) % count + count) % count;
+                return ARS.IsBetween(delta, -10, 400);
+            }, crestRegions, dipPeaks, trackPoints);
         }
 
-        public static void DrawCrests(Vector3 center, float radiusMeters, List<Crest> crests, List<TrackPoint> trackPoints)
+        public static void DrawCrests(Vector3 center, float radiusMeters, List<CrestRegion> crestRegions, List<int> dipPeaks, List<TrackPoint> trackPoints)
         {
-            if (crests.Count == 0 || trackPoints.Count == 0) return;
-            for (int i = 0; i < crests.Count; i++)
+            DrawCrestDipMarkers(point => point.Position.DistanceTo2D(center) <= radiusMeters, crestRegions, dipPeaks, trackPoints);
+        }
+
+        // One mark per feature: a crest mark on every region's peak, a dip mark on every dip run's tightest node. The
+        // filter is the window (racer view) or the radius (spectator view).
+        static void DrawCrestDipMarkers(Func<TrackPoint, bool> include, List<CrestRegion> crestRegions, List<int> dipPeaks, List<TrackPoint> trackPoints)
+        {
+            if (trackPoints.Count == 0) return;
+
+            foreach (CrestRegion region in crestRegions)
             {
-                Crest c = crests[i];
-                if (c.Node < 0 || c.Node >= trackPoints.Count) continue;
-                if (trackPoints[c.Node].Position.DistanceTo2D(center) > radiusMeters) continue;
-                Color peakLineColor = c.Type == CrestDipType.Crest ? CrestLineColor : DipLineColor;
-                DrawTrackCrossingLine(trackPoints, c.Node, peakLineColor);
+                int node = region.PeakNode;
+                if (node < 0 || node >= trackPoints.Count) continue;
+                if (!include(trackPoints[node])) continue;
+                DrawTrackCrossingLine(trackPoints, node, CrestLineColor);
+            }
+
+            foreach (int node in dipPeaks)
+            {
+                if (node < 0 || node >= trackPoints.Count) continue;
+                if (!include(trackPoints[node])) continue;
+                DrawTrackCrossingLine(trackPoints, node, DipLineColor);
             }
         }
 
