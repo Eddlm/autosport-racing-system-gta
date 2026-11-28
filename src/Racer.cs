@@ -2544,7 +2544,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             Brain.CurrentIntention.Speed = AiConstants.MaxIntendedSpeedMps;
             Brain.CurrentIntention.Term = SpeedTerm.None;
 
-            float cornerSpd = 999f;
+            float rampdownSpd = 999f;
             float cornerArrival = 999f;
             int cornerSourceNode = -1;
             CornerPoint lastLapCorner = LastCornerOfLap();
@@ -2554,23 +2554,23 @@ const float RequirementLookaheadSeconds = 3.95f;
 
                 if (NextApexNode >= 0 && !CornerBeyondLastLapCorner(NextApexNode, lastLapCorner, lastLapCornerPassed) && CornerRequiresBraking(NextApexNode))
                 {
-                    cornerSpd = Math.Max(2, ApexBrakingSpeed(NextApexNode, NextApexSpeed));
+                    rampdownSpd = Math.Max(2, ApexBrakingSpeed(NextApexNode, NextApexSpeed));
                     cornerSourceNode = NextApexNode;
                     cornerArrival = NextApexSpeed;
                 }
                 if (NextApexNode2 >= 0 && !CornerBeyondLastLapCorner(NextApexNode2, lastLapCorner, lastLapCornerPassed) && CornerRequiresBraking(NextApexNode2))
                 {
                     float second = Math.Max(2, ApexBrakingSpeed(NextApexNode2, NextApexSpeed2));
-                    if (second < cornerSpd) { cornerSpd = second; cornerSourceNode = NextApexNode2; cornerArrival = NextApexSpeed2; }
+                    if (second < rampdownSpd) { rampdownSpd = second; cornerSourceNode = NextApexNode2; cornerArrival = NextApexSpeed2; }
                 }
                 if (NextApexNode3 >= 0 && !CornerBeyondLastLapCorner(NextApexNode3, lastLapCorner, lastLapCornerPassed) && CornerRequiresBraking(NextApexNode3))
                 {
                     float third = Math.Max(2, ApexBrakingSpeed(NextApexNode3, NextApexSpeed3));
-                    if (third < cornerSpd) { cornerSpd = third; cornerSourceNode = NextApexNode3; cornerArrival = NextApexSpeed3; }
+                    if (third < rampdownSpd) { rampdownSpd = third; cornerSourceNode = NextApexNode3; cornerArrival = NextApexSpeed3; }
                 }
             }
 
-            if (cornerSpd >= 998f)
+            if (rampdownSpd >= 998f)
             {
                 CornerPoint owned = NextApexNode >= 0 && !CornerBeyondLastLapCorner(NextApexNode, lastLapCorner, lastLapCornerPassed)
                     ? ARS.Corners.FirstOrDefault(corner => corner.Node == NextApexNode)
@@ -2579,7 +2579,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (owned != null)
                 {
                     cornerArrival = ARS.CornerApexSpeed(owned, this);
-                    cornerSpd = Math.Max(2f, ApexBrakingSpeed(owned.Node, cornerArrival));
+                    rampdownSpd = Math.Max(2f, ApexBrakingSpeed(owned.Node, cornerArrival));
                     cornerSourceNode = owned.Node;
                 }
             }
@@ -2588,18 +2588,18 @@ const float RequirementLookaheadSeconds = 3.95f;
                 ? RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint) * LiveRouteDownhill * (float)Math.Sqrt(RouteSurfaceGrip())
                 : 999f;
 
-            if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
+            if (float.IsNaN(rampdownSpd) || float.IsInfinity(rampdownSpd)) rampdownSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
-            if (cornerSpd <= 5 && Brain.Corner != null)
+            if (rampdownSpd <= 5 && Brain.Corner != null)
             {
-                cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
-                cornerArrival = cornerSpd;
+                rampdownSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
+                cornerArrival = rampdownSpd;
             }
 
             bool chicane = TrackSpeed.ChicaneBoost && Brain.Corner != null && Brain.Corner.Point.IsChicane;
             if (chicane)
             {
-                cornerSpd += ARS.MphToMps(10f);
+                rampdownSpd += ARS.MphToMps(10f);
                 cornerArrival += ARS.MphToMps(10f);
                 Brain.CurrentIntention.Term = SpeedTerm.Chicane;
             }
@@ -2636,7 +2636,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             // Route is the default authority, a corner an override: it latches only lower and owns the speed to
             // that corner's apex, where it ramps back into the live route term. Each term already carries its own
             // offset (corner: the seeded learner value, route: _routeSpeedOffsetMph) — no offset is added here.
-            float cornerTerm = cornerSpd;
+            float cornerTerm = rampdownSpd;
             float cornerArrivalTerm = cornerArrival;
 
             // The route term is the lookahead window's own speed plus the route learner's offset, and the respected
@@ -2675,11 +2675,11 @@ const float RequirementLookaheadSeconds = 3.95f;
 
                     float toApex = SignedMetresToNode(_cornerModeNode);
                     cornerArrival = _cornerModeSpeed;
-                    cornerSpd = toApex < 0f
+                    rampdownSpd = toApex < 0f
                         ? _cornerModeSpeed
                         : Math.Max(2f, ApexBrakingSpeed(_cornerModeNode, _cornerModeSpeed));
                     cornerSourceNode = _cornerModeNode;
-                    cornerTerm = cornerSpd;
+                    cornerTerm = rampdownSpd;
                     cornerArrivalTerm = cornerArrival;
 
                     if (cornerTerm - ARS.GetForwardSpeed(Car) > CornerDeselectMps)
@@ -2687,8 +2687,8 @@ const float RequirementLookaheadSeconds = 3.95f;
                 }
             }
 
-            if (!_cornerSpeedAuthority && cornerSpd < 998f && cornerSourceNode >= 0
-                && cornerSourceNode != _cornerModeNode && cornerSpd < ARS.GetForwardSpeed(Car))
+            if (!_cornerSpeedAuthority && rampdownSpd < 998f && cornerSourceNode >= 0
+                && cornerSourceNode != _cornerModeNode && rampdownSpd < ARS.GetForwardSpeed(Car))
                 EnterCornerMode(cornerSourceNode, cornerArrival, cornerTerm, routeTerm);
 
             _brakePlanActive = _cornerMode || (NextApexNode >= 0 && CornerRequiresBraking(NextApexNode));

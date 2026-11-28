@@ -141,7 +141,7 @@ as a menu offset — which is how a driver buys caution or commitment without to
 
 **A corner takes the car when its own ramp asks for a lift, and owns the speed only to its apex.** The corner term is worked
 backwards from the apex: the braking map, for the downforce and fixed braking factor this car has. A
-corner becomes the sole authority on the tick its own braking envelope — `cornerSpd`, the ramp down to the latched
+corner becomes the sole authority on the tick its own braking envelope — `rampdownSpd`, the ramp down to the latched
 apex — drops below the car's forward speed: the moment the rampdown asks for a lift. The route term plays no
 part in that entry, and since the envelope sits below the car's own speed on the takeover tick, taking over
 can only slow the car. From
