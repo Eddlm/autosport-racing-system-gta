@@ -156,7 +156,7 @@ namespace ARS
                 int delta = ARS.IsPointToPoint ? c.Node - centreNode : ((c.Node - centreNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
                 if (!ARS.IsBetween(delta, -10, 400)) continue;
 
-                Color peakLineColor = c.Type == CrestType.Crest ? CrestLineColor : DipLineColor;
+                Color peakLineColor = c.Type == CrestDipType.Crest ? CrestLineColor : DipLineColor;
                 DrawTrackCrossingLine(trackPoints, c.Node, peakLineColor);
             }
         }
@@ -169,7 +169,7 @@ namespace ARS
                 Crest c = crests[i];
                 if (c.Node < 0 || c.Node >= trackPoints.Count) continue;
                 if (trackPoints[c.Node].Position.DistanceTo2D(center) > radiusMeters) continue;
-                Color peakLineColor = c.Type == CrestType.Crest ? CrestLineColor : DipLineColor;
+                Color peakLineColor = c.Type == CrestDipType.Crest ? CrestLineColor : DipLineColor;
                 DrawTrackCrossingLine(trackPoints, c.Node, peakLineColor);
             }
         }

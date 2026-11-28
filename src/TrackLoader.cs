@@ -239,7 +239,7 @@ namespace ARS
                     ? ARS.CrestCurvature(ARS.RouteNodes[Wrap(point.Node - CrestSampleNodes, nodeCount)],
                         ARS.RouteNodes[point.Node], ARS.RouteNodes[Wrap(point.Node + CrestSampleNodes, nodeCount)])
                     : 0f;
-                point.CrestRadius = crestCurvature == 0f ? 0f : 1f / crestCurvature;
+                point.CrestDipRadius = crestCurvature == 0f ? 0f : 1f / crestCurvature;
             }
             else
             {
@@ -247,7 +247,7 @@ namespace ARS
                 point.Angle = 0f;
                 point.Direction = nodeCount > 10 ? (ARS.RouteNodes[10] - ARS.RouteNodes[5]).Normalized : Vector3.Zero;
                 point.SlopeSineTimes90 = 0f;
-                point.CrestRadius = 0f;
+                point.CrestDipRadius = 0f;
                 point.GeneralCurveRadius = 999f;
                 point.PreciseCurveRadius = 999f;
                 point.ExactRadius = 999f;
@@ -266,7 +266,7 @@ namespace ARS
             float tightestCrest = 0f, tightestDip = 0f;
             for (int node = 0; node < ARS.TrackPoints.Count; node++)
             {
-                float radius = ARS.TrackPoints[node].CrestRadius;
+                float radius = ARS.TrackPoints[node].CrestDipRadius;
                 if (radius > 0f)
                 {
                     crests++;
@@ -1024,7 +1024,7 @@ namespace ARS
                 }
                 foreach (Crest crest in ARS.Crests)
                 {
-                    if (crest.Type != CrestType.Crest || crest.Node < 0) continue;
+                    if (crest.Type != CrestDipType.Crest || crest.Node < 0) continue;
                     int behind = ARS.IsPointToPoint ? corner.StartNode - crest.Node : Wrap(corner.StartNode - crest.Node, count);
                     if (behind <= 0 || behind > FeatureEntranceSearchNodes) continue;
                     if (behind > farthestBehind) { farthestBehind = behind; featureNode = crest.Node; featureKind = "crest"; }
@@ -1139,9 +1139,9 @@ namespace ARS
                 float gradeBefore = ARS.LocalSlope(ARS.TrackPoints[before].Position, ARS.TrackPoints[node].Position);
                 float gradeAfter = ARS.LocalSlope(ARS.TrackPoints[node].Position, ARS.TrackPoints[after].Position);
 
-                CrestType type;
-                if (gradeBefore > 0f && gradeAfter < 0f) type = CrestType.Crest;
-                else if (gradeBefore < 0f && gradeAfter > 0f) type = CrestType.Dip;
+                CrestDipType type;
+                if (gradeBefore > 0f && gradeAfter < 0f) type = CrestDipType.Crest;
+                else if (gradeBefore < 0f && gradeAfter > 0f) type = CrestDipType.Dip;
                 else continue;
 
                 float gsAt100 = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[node].Position, ARS.TrackPoints[after].Position, 45f);
@@ -1157,13 +1157,13 @@ namespace ARS
             int crests = 0, dips = 0;
             foreach (Crest c in ARS.Crests)
             {
-                if (c.Type == CrestType.Crest) crests++; else dips++;
-                ARS.Log(ARS.LogImportance.Info, (c.Type == CrestType.Crest ? "Crest" : "Dip") + " node=" + c.Node + " gs@100mph=" + c.GsAt100Mph.ToString("0.00"));
+                if (c.Type == CrestDipType.Crest) crests++; else dips++;
+                ARS.Log(ARS.LogImportance.Info, (c.Type == CrestDipType.Crest ? "Crest" : "Dip") + " node=" + c.Node + " gs@100mph=" + c.GsAt100Mph.ToString("0.00"));
             }
             ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips (sign change in local grade over " + window + "-node sample, gs at 100mph)");
         }
 
-        // The crest as a feature, walked as contiguous runs of crest-signed nodes. Reads only TrackPoint.CrestRadius,
+        // The crest as a feature, walked as contiguous runs of crest-signed nodes. Reads only TrackPoint.CrestDipRadius,
         // so it is the field's projection rather than a second detector.
         static void BuildCrestRegions(int count)
         {
@@ -1176,7 +1176,7 @@ namespace ARS
                 int runEnd = -1;
                 for (int node = 0; node < count; node++)
                 {
-                    if (ARS.TrackPoints[node].CrestRadius > 0f)
+                    if (ARS.TrackPoints[node].CrestDipRadius > 0f)
                     {
                         if (runStart < 0) runStart = node;
                         runEnd = node;
@@ -1197,7 +1197,7 @@ namespace ARS
             int start = -1;
             for (int node = 0; node < count; node++)
             {
-                if (ARS.TrackPoints[node].CrestRadius <= 0f) { start = node; break; }
+                if (ARS.TrackPoints[node].CrestDipRadius <= 0f) { start = node; break; }
             }
             if (start < 0) return;
 
@@ -1206,7 +1206,7 @@ namespace ARS
             for (int step = 1; step <= count; step++)
             {
                 int node = Wrap(start + step, count);
-                if (ARS.TrackPoints[node].CrestRadius > 0f)
+                if (ARS.TrackPoints[node].CrestDipRadius > 0f)
                 {
                     if (begin < 0) begin = node;
                     end = node;
@@ -1228,7 +1228,7 @@ namespace ARS
             int node = firstNode;
             for (int step = 0; step < count; step++)
             {
-                float crestRadius = ARS.TrackPoints[node].CrestRadius;
+                float crestRadius = ARS.TrackPoints[node].CrestDipRadius;
                 if (crestRadius > 0f && crestRadius < radius)
                 {
                     radius = crestRadius;

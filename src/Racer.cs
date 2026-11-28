@@ -2774,7 +2774,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             int count = ARS.TrackPoints.Count;
             if (node < 0 || node >= count) return 999f;
 
-            float radius = ARS.TrackPoints[node].CrestRadius;
+            float radius = ARS.TrackPoints[node].CrestDipRadius;
             if (radius <= 0f) return 999f;
 
             return (float)Math.Sqrt(ARS.MaxCrestLift * Handling.Gravity * radius);

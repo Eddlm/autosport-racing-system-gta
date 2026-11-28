@@ -217,7 +217,7 @@ pass that also made contact still deducts: contact is measured directly, clearan
 one is spoiled by the crest. A chicane is the one automatic relaxation: both terms get a boost, because a flick is not
 a corner in the sense the geometry takes it for.
 
-**Every node carries its vertical shape, the way it carries its horizontal one.** `TrackPoint.CrestRadius` is the
+**Every node carries its vertical shape, the way it carries its horizontal one.** `TrackPoint.CrestDipRadius` is the
 signed radius through that node's own neighbour sample (`CrestSampleNodes`), crest positive, zero where the road runs
 straight, and it comes from one kernel (`CrestCurvature`) that the gate's hill-grip read shares, so the field and the
 gate cannot disagree about what a crest is. It measures the whole chord, not the sharpest metre inside it: a broad
