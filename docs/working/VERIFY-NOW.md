@@ -4,9 +4,26 @@ Build deployed: **2143** (`51957b0a025de1d5`). What is ✅ is yours, verified in
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). Open ledger measured 2026-11-28: **18 prose sections** (route-speed era onward, pass conditions in prose) and **86 pipe-rows** (AB back to AF).
+**Section P is closed** (all eighteen verified). Open ledger measured 2026-11-28: **19 prose sections** (route-speed era onward, pass conditions in prose) and **86 pipe-rows** (AB back to AF).
 Everything answered or disposed of sits in **Answered** at the bottom, out of the way, kept for provenance. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
+
+---
+
+## AY · 2026-11-28 (2146 → 2147) — the verdict goes clearance-only: the road is the referee
+
+His second figureight read («it still adds speed even as it had rode the edge») ended the slip gates: **a small slide
+is not an influence on whether the corner used its road.** Every post-apex sample tick now measures the closest
+outside clearance (unchanged measure — lane offset, sliding box, half-width), and the verdict is: clearance above the
+margin raises `(clearance − margin) × 0.5` (step cap ±2 m/s), below zero pays `clearance × 0.5` (`offtrack` suffix
+kept), `0..1 m` **holds, announced** (`closest 0.4 m, holding`), and a pass with no measured tick holds (`no measure,
+holding`). The 2.0× sampling gate, the 1.05× ride gate, the no-slide +2 default and the rode-share readouts all died
+the same day they shipped — AX documents that arc. Off-track: the flag now sets on the beyond-edge event **alone**, so
+a contactless off-road pays the flat −2 — AX's first cut only paid within 1 s of a contact (`CornerSpeedLearnHitOffTrackMs`
+deleted with the coupling).
+
+Pass condition: on the figureight re-run, edge-riding passes **hold or pay, never rise**; full-road passes raise at
+≤ 2 m/s; off-roads pay −2 with or without contact; every judged pass announces `closest N m · ±N.NN m/s`.
 
 ---
 
