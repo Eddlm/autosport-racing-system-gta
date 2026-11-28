@@ -990,14 +990,14 @@ namespace ARS
                     LipNode = node,
                     RiseStartNode = riseStart,
                     DepartureGrade = departure,
-                    LipCurvature = drop / BumpOnsetRungMeters,
+                    LipCrestRadius = drop > 0.0001f ? BumpOnsetRungMeters / drop : 0f,
                 });
 
                 if (after > node) node = after;
             }
 
             foreach (Bump bump in ARS.Bumps)
-                ARS.Log(ARS.LogImportance.Info, "Bump: lip=" + bump.LipNode + " rise=" + bump.RiseStartNode + " grade=" + bump.DepartureGrade.ToString("0.000") + " curvature=" + bump.LipCurvature.ToString("0.000"));
+                ARS.Log(ARS.LogImportance.Info, "Bump: lip=" + bump.LipNode + " rise=" + bump.RiseStartNode + " grade=" + bump.DepartureGrade.ToString("0.000") + " lipCrestR=" + bump.LipCrestRadius.ToString("0.0", CultureInfo.InvariantCulture));
 
             if (!seamOk) ARS.Log(ARS.LogImportance.Info, "Bumps: the route seam steps at grade " + seamGrade.ToString("0.000") + ", so no lip is taken within " + BumpMaxRunMeters.ToString("0.0") + "m of it");
             ARS.Log(ARS.LogImportance.Info, "Bumps: " + ARS.Bumps.Count + " lips, minimum departure grade " + BumpMinDepartureGrade.ToString("0.000") + ", run " + BumpMinRunMeters.ToString("0.0") + "-" + BumpMaxRunMeters.ToString("0.0") + "m");

@@ -404,7 +404,7 @@ namespace ARS
         public int LipNode = -1;
         public int RiseStartNode = -1;
         public float DepartureGrade = 0f;
-        public float LipCurvature = 0f;
+        public float LipCrestRadius = 0f;   // vertical radius at the lip, metres: the onset rung over the grade drop
     }
 
     public enum CrestDipType { Crest, Dip }
