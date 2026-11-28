@@ -969,7 +969,7 @@ namespace ARS
             };
             rivalPaceMenu.Add(brakeLearningItem);
 
-            NativeCheckboxItem cornerSpeedLearningItem = new NativeCheckboxItem("Corner Speed Learning", "Each corner learns how much speed rivals dare to carry through it: the learned number is an offset in m/s on the corner's target, starting at the Corner Speed Offset setting. Past the apex, while sliding past three quarters of the modelled peak slip, the pass keeps the least clearance between the car's outer side and that corner's outer road edge; more clearance raises the offset, less lowers it, at 0.5 m/s per metre. Off stops the learning and leaves every corner on the seeded offset.", CornerSpeedLearning);
+            NativeCheckboxItem cornerSpeedLearningItem = new NativeCheckboxItem("Corner Speed Learning", "Each corner learns how much speed rivals dare to carry through it: the learned number is an offset in m/s on the corner's target, starting at the Corner Speed Offset setting. Past the apex, while sliding past twice the modelled peak slip, the pass keeps the least clearance between the car's outer side and that corner's outer road edge; more clearance raises the offset, less lowers it, at 0.5 m/s per metre. Off stops the learning and leaves every corner on the seeded offset.", CornerSpeedLearning);
             cornerSpeedLearningItem.CheckboxChanged += (sender, args) =>
             {
                 CornerSpeedLearning = cornerSpeedLearningItem.Checked;
@@ -2215,8 +2215,7 @@ namespace ARS
                         string cornerSpeedLine = apexReader != null
                             ? "~n~" + apexReader.CornerSpeedOffsetFor(marked.Node).ToString("+0.0;-0.0;0", CultureInfo.InvariantCulture) + " m/s"
                             : string.Empty;
-                        bool apexCrestCapped = false;
-                        if (apexReader != null) ARS.CornerApexSpeed(marked, apexReader, out apexCrestCapped);
+                        bool apexCrestCapped = apexReader != null && apexReader.CrestCeilingAt(marked.Node) < ARS.CornerApexSpeedUncapped(marked, apexReader);
                         string crestLine = apexCrestCapped
                             ? "~n~crest " + Math.Round(ARS.MpsToMph(apexReader.CrestCeilingAt(marked.Node))).ToString(CultureInfo.InvariantCulture) + " mph"
                             : string.Empty;
@@ -3235,24 +3234,15 @@ namespace ARS
             return 1f - Math.Min((1f - factor) * HillGripEffect, 0.9f);
         }
 
+        // The crest at the apex caps the corner's held speed: the unload lands exactly where the tyre needs its normal
+        // load most, so the apex is the one node that has to survive it.
         public static float CornerApexSpeed(CornerPoint c, Racer r)
         {
-            return CornerApexSpeed(c, r, out _);
-        }
-
-        // The crest at the apex caps the corner's held speed: the unload lands exactly where the tyre needs its normal
-        // load most, so the apex is the one node that has to survive it. crestCapped says whether that ceiling is what
-        // fixed the number, so the learner and the readout can name the crest instead of blaming the corner.
-        public static float CornerApexSpeed(CornerPoint c, Racer r, out bool crestCapped)
-        {
-            crestCapped = false;
             if (r == null) return AiConstants.MaxIntendedSpeedMps;
 
             float apexSpeed = CornerApexSpeedUncapped(c, r);
             float crestCeiling = r.CrestCeilingAt(c.Node);
             if (crestCeiling >= apexSpeed) return apexSpeed;
-
-            crestCapped = true;
             return Math.Max(crestCeiling, AiConstants.MinIntendedSpeedMps);
         }
 

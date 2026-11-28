@@ -389,9 +389,9 @@ namespace ARS
         const float CornerSpeedLearnLimitMps = 10f;
 
         const float CornerSpeedLearnDeltaLimitMps = 2f;
-        const float CornerSpeedLearnMinSlideShare = 0.75f;
-
-        const float CornerSpeedLearnLostControlDegrees = 20f;
+        // Sampling gate: three quarters (0.75) let scrub in as "slid"; twice the modelled peak reads a real loss —
+        // the tyre curve bottoms at 2.5x the peak angle, so 2.0 sits near the actual give-up.
+        const float CornerSpeedLearnMinSlideShare = 2f;
 
         const int CornerSpeedLearnQuietContactMs = 4000;
 
@@ -419,7 +419,6 @@ namespace ARS
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedLastSampleMs = -1;
         float _cornerSpeedMinOutsideClearanceMetres = float.MaxValue;
-        float _cornerSpeedWorstSlideDeg;
         bool _cornerSpeedHitOffTrack;
         int _cornerSpeedOutsideSamples;
 
@@ -2257,7 +2256,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerSpeedLastSampleMs = VehicleData.LastAccelSampleTime;
             float slide = Math.Abs(VehicleData.SlideAngle);
             if (float.IsNaN(slide) || float.IsInfinity(slide)) return;
-            if (slide > _cornerSpeedWorstSlideDeg) _cornerSpeedWorstSlideDeg = slide;
             if (slide / TRLateralAtSpeed < CornerSpeedLearnMinSlideShare) return;
 
             float signedOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
@@ -2278,7 +2276,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerSpeedLastSampleMs = -1;
             _cornerSpeedMinOutsideClearanceMetres = float.MaxValue;
             _cornerSpeedOutsideSamples = 0;
-            _cornerSpeedWorstSlideDeg = 0f;
             _cornerSpeedHitOffTrack = false;
         }
 
@@ -2316,16 +2313,6 @@ const float RequirementLookaheadSeconds = 3.95f;
                 return;
             }
 
-            CornerPoint judgedCorner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
-            bool crestCapped = false;
-            if (judgedCorner != null) ARS.CornerApexSpeed(judgedCorner, this, out crestCapped);
-            if (crestCapped)
-            {
-                AnnounceCornerSpeedAdjustment(CornerId(apexNode) + " · crest caps the apex, nothing to learn",
-                    "crest - no change");
-                return;
-            }
-
             _cornerSpeedLocked.Add(apexNode);
 
             float before = TryGetCornerContext(apexNode, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
@@ -2348,8 +2335,6 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             delta = ARS.Clamp(delta, -CornerSpeedLearnDeltaLimitMps, CornerSpeedLearnDeltaLimitMps);
 
-            bool lostControl = _cornerSpeedWorstSlideDeg > CornerSpeedLearnLostControlDegrees && delta < 0f;
-            if (lostControl) delta = 0f;
             float after = ARS.Clamp(before + delta, -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
 
             CornerContextForWrite(apexNode).CornerSpeedOffsetMps = after;
@@ -2362,15 +2347,12 @@ const float RequirementLookaheadSeconds = 3.95f;
             string offtrack = hadSlipSample && clearance < 0f ? " · ~r~offtrack~w~" : "";
 
             string reasonText = hadSlipSample ? clearance.ToString("0.0", CultureInfo.InvariantCulture) + " m" : "no slide";
-            if (lostControl)
-                reasonText = "lost control " + _cornerSpeedWorstSlideDeg.ToString("0", CultureInfo.InvariantCulture) + "°";
             string verdictText = hadSlipSample
                 ? " · verdict " + verdictClearance.ToString("0.0", CultureInfo.InvariantCulture) + " m"
                 : "";
 
             if (applied < 0f) reasonText = "~r~" + reasonText + "~w~";
-            AnnounceCornerSpeedAdjustment(id + " · " + peakText + verdictText + " · " + deltaText + offtrack
-                + (lostControl ? " · lost control, deduction voided" : ""),
+            AnnounceCornerSpeedAdjustment(id + " · " + peakText + verdictText + " · " + deltaText + offtrack,
                 reasonText + " - " + deltaText);
         }
 
