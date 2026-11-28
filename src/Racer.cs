@@ -2604,11 +2604,11 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             int count = ARS.TrackPoints.Count;
             int carNode = CurrentTrackPoint.Node;
-            float routeCrestFactor = CrestGripSpeedFactor(carNode, count, out int routeNear, out int routeFar, out _);
+            float crestCeiling = CrestSpeedCeiling(carNode, out int crestNode);
 
-            LiveRouteCrestNode = routeNear;
-            LiveRouteCrestFarNode = routeFar;
-            followTrackSpd *= routeCrestFactor;
+            LiveRouteCrestNode = crestNode;
+            LiveRouteCrestFarNode = -1;
+            if (crestCeiling < followTrackSpd) followTrackSpd = crestCeiling;
 
             if (chicane) followTrackSpd += ARS.MphToMps(10f);
 
@@ -2726,31 +2726,37 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (!burning && rbFactor < 1f && !rbFreeZone && !(ARS.CurrentRubberbandMode == RubberbandMode.Natural && rbNearbyRival))
                 Brain.CurrentIntention.Speed *= rbFactor;
         }
-        const float CrestNearSeconds = 1.0f;
-        const float CrestFarSeconds = 2.0f;
-        float CrestGripSpeedFactor(int carNode, int count, out int nearNode, out int farNode, out float rawDeltaGs)
+        // A crest is a cornering problem: while the speed node is a bend the crest's limit protects grip that is
+        // actually being spent. On an open radius it only fights short vertical kicks — a rail crossing reads as a
+        // few-metre crest and stopped the cars at the crossing — so there the crest is ignored.
+        public const float CrestIgnoreAboveRouteRadiusMeters = 800f;
+
+        // True while the crest ceiling is actually being consulted — false on an open radius, where the crest is
+        // ignored by design. The track analysis colours its mark by this so an absent slowdown is readable as policy.
+        public bool CrestIsBinding => Brain.CurrentPerception.CurveRadiusToFollowPoint <= CrestIgnoreAboveRouteRadiusMeters;
+
+        // The crest node's own speed: the speed at which that crest unloads the car by exactly MaxCrestLift
+        // (v^2 / (R * g) = MaxCrestLift). An absolute ceiling, not a share of the route term — a share of an open
+        // radius asks far more than the crest allows, and scaling it would leave the straight untouched.
+        float CrestSpeedCeiling(int carNode, out int crestNode)
         {
-            nearNode = -1;
-            farNode = -1;
-            rawDeltaGs = 0f;
-            if (!TrackSpeed.CrestGate) return 1f;
-            if (carNode < 0 || carNode >= count) return 1f;
+            crestNode = -1;
+            if (!TrackSpeed.CrestGate) return 999f;
+
+            int count = ARS.TrackPoints.Count;
+            if (carNode < 0 || carNode >= count) return 999f;
+            if (Brain.CurrentPerception.CurveRadiusToFollowPoint > CrestIgnoreAboveRouteRadiusMeters) return 999f;
             float v = Car.Velocity.Length();
-            if (v < 0.5f) return 1f;
+            if (v < 0.5f) return 999f;
 
-            int near = TrackLoader.NodeAhead(carNode, CrestNearSeconds * v, count);
-            int far = TrackLoader.NodeAhead(carNode, CrestFarSeconds * v, count);
-            if (near < 0 || far < 0) return 1f;
-            if (near == carNode || far == carNode || near == far) return 1f;
-            nearNode = near;
-            farNode = far;
+            int region = ARS.CrestRegionAhead(carNode, v * ARS.CrestLookaheadSeconds);
+            if (region < 0) return 999f;
 
-            float deltaGs = ARS.HillGripDeltaGs(ARS.TrackPoints[carNode].Position, ARS.TrackPoints[near].Position, ARS.TrackPoints[far].Position, v);
-            rawDeltaGs = deltaGs;
-            if (deltaGs > 0f) deltaGs = 0f;
-            float magGs = Math.Abs(deltaGs);
-            if (magGs <= ARS.MaxCrestLift) return 1f;
-            return (float)Math.Sqrt(ARS.MaxCrestLift / magGs);
+            CrestRegion crest = ARS.CrestRegions[region];
+            crestNode = crest.PeakNode;
+            if (crest.Radius <= 0f) return 999f;
+
+            return (float)Math.Sqrt(ARS.MaxCrestLift * Handling.Gravity * crest.Radius);
         }
 
         float ComputeRubberBandFactor()

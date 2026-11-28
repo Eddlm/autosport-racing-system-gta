@@ -50,6 +50,7 @@ namespace ARS
 
         public static List<Bump> Bumps = new List<Bump>();
         public static List<Crest> Crests = new List<Crest>();
+        public static List<CrestRegion> CrestRegions = new List<CrestRegion>();
 
         public static List<string> KnownTracks = new List<string>();
 
@@ -2220,6 +2221,10 @@ namespace ARS
                             Color.White, 0.5f);
                     }
 
+                    Racer crestReader = DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null);
+                    if (crestReader != null && ARS.CanWeUse(crestReader.Car))
+                        TrackVisuals.DrawCrestLookahead(crestReader, ARS.TrackPoints);
+
                     if (DrawTrackAnalysisExtras)
                     {
                         if (PlayerRacer != null)
@@ -3054,10 +3059,10 @@ namespace ARS
             return TrackLoader.Circumradius3D(a, b, midpoint);
         }
 
-        public static float HillGripDeltaGs(Vector3 start, Vector3 midpoint, Vector3 end, float velocity)
-        {
-            if (velocity <= 0f) return 0f;
+        public const float CrestLookaheadSeconds = 2f;
 
+        public static float CrestCurvature(Vector3 start, Vector3 midpoint, Vector3 end)
+        {
             float s0 = 0f;
             float s1 = Vector2.Distance(new Vector2(start.X, start.Y), new Vector2(midpoint.X, midpoint.Y));
             float s2 = s1 + Vector2.Distance(new Vector2(midpoint.X, midpoint.Y), new Vector2(end.X, end.Y));
@@ -3080,9 +3085,63 @@ namespace ARS
             float cross = (ab.X * ac.Y) - (ab.Y * ac.X);
             float curvature = (2f * cross) / (abLen * bcLen * acLen);
             if (Math.Abs(curvature) < 0.00001f) return 0f;
+            if (float.IsNaN(curvature) || float.IsInfinity(curvature)) return 0f;
+
+            return -curvature;
+        }
+
+        // The crest ahead, picked from the table: the strictest region whose extent overlaps the lookahead span, which
+        // includes the crest the car is standing on. -1 when the span holds no crest. One pick for the law and the
+        // track-analysis text, so the number on screen is the number used.
+        public static int CrestRegionAhead(int carNode, float metres)
+        {
+            int count = TrackPoints.Count;
+            if (count == 0 || carNode < 0 || carNode >= count || CrestRegions.Count == 0) return -1;
+
+            int endNode = TrackLoader.NodeAhead(carNode, metres, count);
+            int span = IsPointToPoint ? endNode - carNode : (endNode - carNode + count) % count;
+
+            int best = -1;
+            float bestRadius = 0f;
+            for (int i = 0; i < CrestRegions.Count; i++)
+            {
+                CrestRegion region = CrestRegions[i];
+                if (!OverlapsLookahead(region, carNode, span, count)) continue;
+
+                if (best < 0 || region.Radius < bestRadius)
+                {
+                    best = i;
+                    bestRadius = region.Radius;
+                }
+            }
+            return best;
+        }
+
+        // Does the region's extent meet [car, car + span]? A region whose first node is ahead of its last wraps around
+        // the car, which means the car is standing on it. Testing only the peak node loses the back half of every crest.
+        static bool OverlapsLookahead(CrestRegion region, int carNode, int span, int count)
+        {
+            if (IsPointToPoint)
+            {
+                int first = region.FirstNode - carNode;
+                int last = region.LastNode - carNode;
+                return last >= 0 && (first <= 0 || first <= span);
+            }
+
+            int firstAhead = (region.FirstNode - carNode + count) % count;
+            int lastAhead = (region.LastNode - carNode + count) % count;
+            return firstAhead > lastAhead || firstAhead <= span;
+        }
+
+        public static float HillGripDeltaGs(Vector3 start, Vector3 midpoint, Vector3 end, float velocity)
+        {
+            if (velocity <= 0f) return 0f;
+
+            float curvature = CrestCurvature(start, midpoint, end);
+            if (curvature == 0f) return 0f;
 
             const float Gravity = 9.8f;
-            float deltaGs = ((velocity * velocity) * curvature) / Gravity;
+            float deltaGs = -((velocity * velocity) * curvature) / Gravity;
 
             if (float.IsNaN(deltaGs) || float.IsInfinity(deltaGs)) return 0f;
             return deltaGs;

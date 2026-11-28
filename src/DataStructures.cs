@@ -366,6 +366,7 @@ namespace ARS
         public float SweepCurveRadius = 999f;
         public float ExactRadius = 999f;
         public float SlopeSineTimes90 = 0f;
+        public float CrestRadius = 0f;   // vertical radius at this node, crest positive, 0 = no vertical bend
         public float TrackHalfWidth = 5f;
         public float CumulativeDistance = 0f;
         public float LaneLineShare;
@@ -413,6 +414,21 @@ namespace ARS
         public CrestType Type = CrestType.Crest;
 
         public float GsAt100Mph = 0f;
+    }
+
+    // A crest as a feature: one contiguous stretch of crest-signed nodes with its peak, its extent and the radius that
+    // peak reads. Static per track — nothing here depends on the car — and derived from TrackPoint.CrestRadius, so
+    // elevation still has one author. LengthMeters spans FirstNode to LastNode (the hop out of the region is not
+    // counted) while NodeCount counts both ends; a region crossing the index seam has FirstNode > LastNode and Wraps set.
+    public class CrestRegion
+    {
+        public int FirstNode = -1;
+        public int PeakNode = -1;
+        public int LastNode = -1;
+        public bool Wraps = false;
+        public int NodeCount = 0;
+        public float LengthMeters = 0f;
+        public float Radius = 0f;
     }
     public class Corner
     {

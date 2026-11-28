@@ -208,10 +208,27 @@ carries the route term itself — so the apex seed always has something to seed.
 
 **The road's own shape corrects both terms.** A hill takes grip from both — the route term at the follow
 point, the corner at its apex inside its braking map, where its grade enters as a deceleration change rather
-than a speed factor. Vertical curvature is a route-side term only: a speed factor from the hill's grip delta
-over a window ahead of the car, so a crest that unloads it is felt before it is met, and the corner side has no
+than a speed factor. Vertical curvature is a route-side term only: a ceiling from the crest node's own speed inside
+a window ahead of the car, so a crest that unloads it is felt before it is met, and the corner side has no
 such term. A chicane is the one automatic relaxation: both terms get a boost, because a flick is not a corner
 in the sense the geometry takes it for.
+
+**Every node carries its vertical shape, the way it carries its horizontal one.** `TrackPoint.CrestRadius` is the
+signed radius through that node's own neighbour sample (`CrestSampleNodes`), crest positive, zero where the road runs
+straight, and it comes from one kernel (`CrestCurvature`) that the gate's hill-grip read shares, so the field and the
+gate cannot disagree about what a crest is. It measures the whole chord, not the sharpest metre inside it: a broad
+crest reads true, a short roof reads shallower than its peak, because the sample is longer than the car's wheelbase.
+The gate no longer fits the road: it takes the crest node inside that same two-second span and caps the route offer
+with that node's own speed — the speed at which the crest unloads the car by exactly `MaxCrestLift` — but only while
+the speed node itself is a bend (`CrestIgnoreAboveRouteRadiusMeters`). On an open radius the crest is ignored: a crest
+there costs no cornering grip, and a rail crossing would otherwise read as a few-metre crest and stop the car. So the
+number on the track analysis is the number being applied, and a crest is a ceiling in the same unit as the speed
+node's speed, not a share of an open radius that a straight inflates far past any cap.
+
+The field is then read once at load into a table of **crest regions** — contiguous stretches of crest-signed road,
+each with its peak node, its first and last node, its length and the radius that peak reads. It is static, so it is
+built once and logged with the track, and it is where a crest's *length* becomes visible: a short kick and a long
+crest can read the same radius and do not cost the car the same time.
 
 **Where the plan meets the moment.** The pedals are not the plan's number. They map the speed error through
 one linear law — with a single deliberate exception below a walking pace, where a sub-split throttle is

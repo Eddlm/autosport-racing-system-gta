@@ -9,6 +9,9 @@ namespace ARS
 {
     public static class TrackVisuals
     {
+        static readonly Color CrestLineColor = Color.FromArgb(255, 255, 140, 0);
+        static readonly Color DipLineColor = Color.FromArgb(255, 0, 200, 255);
+        static readonly Color CrestIgnoredColor = Color.FromArgb(200, 150, 150, 150);
         public static void DrawRoute(List<Vector3> nodes, Dictionary<int, float> widths, bool editorActive)
         {
             if (nodes.Count == 0) return;
@@ -153,7 +156,7 @@ namespace ARS
                 int delta = ARS.IsPointToPoint ? c.Node - centreNode : ((c.Node - centreNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
                 if (!ARS.IsBetween(delta, -10, 400)) continue;
 
-                Color peakLineColor = c.Type == CrestType.Crest ? Color.FromArgb(255, 255, 140, 0) : Color.FromArgb(255, 0, 200, 255);
+                Color peakLineColor = c.Type == CrestType.Crest ? CrestLineColor : DipLineColor;
                 DrawTrackCrossingLine(trackPoints, c.Node, peakLineColor);
             }
         }
@@ -166,7 +169,7 @@ namespace ARS
                 Crest c = crests[i];
                 if (c.Node < 0 || c.Node >= trackPoints.Count) continue;
                 if (trackPoints[c.Node].Position.DistanceTo2D(center) > radiusMeters) continue;
-                Color peakLineColor = c.Type == CrestType.Crest ? Color.FromArgb(255, 255, 140, 0) : Color.FromArgb(255, 0, 200, 255);
+                Color peakLineColor = c.Type == CrestType.Crest ? CrestLineColor : DipLineColor;
                 DrawTrackCrossingLine(trackPoints, c.Node, peakLineColor);
             }
         }
@@ -178,6 +181,26 @@ namespace ARS
                 DrawTrackCrossingLine(trackPoints, racer.LiveRouteCrestNode, Color.FromArgb(200, 80, 160, 255));
             if (racer.LiveRouteCrestFarNode >= 0 && racer.LiveRouteCrestFarNode < trackPoints.Count)
                 DrawTrackCrossingLine(trackPoints, racer.LiveRouteCrestFarNode, Color.FromArgb(220, 255, 60, 60));
+        }
+
+        public static void DrawCrestLookahead(Racer racer, List<TrackPoint> trackPoints)
+        {
+            int count = trackPoints.Count;
+            if (count == 0 || racer == null || !ARS.CanWeUse(racer.Car)) return;
+            float speed = racer.Car.Velocity.Length();
+            if (speed < 1f) return;
+
+            int region = ARS.CrestRegionAhead(racer.CurrentTrackPoint.Node, speed * ARS.CrestLookaheadSeconds);
+            if (region < 0) return;
+
+            CrestRegion crest = ARS.CrestRegions[region];
+            int node = crest.PeakNode;
+            if (node < 0 || node >= count) return;
+
+            Color markColor = racer.CrestIsBinding ? CrestLineColor : CrestIgnoredColor;
+            DrawTrackCrossingLine(trackPoints, node, markColor);
+            ARS.DrawText(trackPoints[node].Position + Vector3.WorldUp * 2.2f,
+                crest.Radius.ToString("0") + " m", markColor, 0.5f);
         }
 
         public static void DrawRouteRadiusChecks(Racer racer, List<TrackPoint> trackPoints)

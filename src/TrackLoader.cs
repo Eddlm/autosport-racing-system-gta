@@ -195,14 +195,19 @@ namespace ARS
 
             int nodeCount = ARS.RouteNodes.Count;
             foreach (TrackPoint point in ARS.TrackPoints) ComputePointGeometry(point, nodeCount);
+            LogCrestField();
 
             AssignSurfaceGrip();
             BuildApexTable();
+            LogCrestRegions();
             LogSurfaceAtApexes();
             ARS.Log(ARS.LogImportance.Info, "Route generated");
         }
         const int GeometryWindowNodes = 10;
         const int PointToPointEndBandNodes = 50;
+        // +-8 nodes is a 16 m chord on every shipped track (1 m spacing), which resolves the crests that matter
+        // at racing speeds; flatter than ~600 m the read goes soft, past the speed that would use it.
+        const int CrestSampleNodes = 8;
 
         const float SweepRadiusDegrees = 20f;
         // 20 degrees of turn costs arc = r*0.349 nodes: 350 resolves radii up to the 999 open boundary,
@@ -230,6 +235,11 @@ namespace ARS
                 point.PreciseCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 4, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 4, nodeCount)], ARS.RouteNodes[point.Node]);
                 point.SweepCurveRadius = SweptRadius(point.Node, nodeCount);
                 point.ExactRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 2, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 2, nodeCount)], ARS.RouteNodes[point.Node]);
+                float crestCurvature = nodeCount > 2 * CrestSampleNodes + 1
+                    ? ARS.CrestCurvature(ARS.RouteNodes[Wrap(point.Node - CrestSampleNodes, nodeCount)],
+                        ARS.RouteNodes[point.Node], ARS.RouteNodes[Wrap(point.Node + CrestSampleNodes, nodeCount)])
+                    : 0f;
+                point.CrestRadius = crestCurvature == 0f ? 0f : 1f / crestCurvature;
             }
             else
             {
@@ -237,6 +247,7 @@ namespace ARS
                 point.Angle = 0f;
                 point.Direction = nodeCount > 10 ? (ARS.RouteNodes[10] - ARS.RouteNodes[5]).Normalized : Vector3.Zero;
                 point.SlopeSineTimes90 = 0f;
+                point.CrestRadius = 0f;
                 point.GeneralCurveRadius = 999f;
                 point.PreciseCurveRadius = 999f;
                 point.ExactRadius = 999f;
@@ -244,6 +255,33 @@ namespace ARS
             }
 
             if (ARS.NodeHalfWidths.ContainsKey(point.Node)) point.TrackHalfWidth = ARS.NodeHalfWidths[point.Node];
+        }
+
+        static void LogCrestField()
+        {
+            if (ARS.LogLevel > ARS.LogImportance.Info) return;
+
+            int crests = 0, dips = 0;
+            int crestNode = -1, dipNode = -1;
+            float tightestCrest = 0f, tightestDip = 0f;
+            for (int node = 0; node < ARS.TrackPoints.Count; node++)
+            {
+                float radius = ARS.TrackPoints[node].CrestRadius;
+                if (radius > 0f)
+                {
+                    crests++;
+                    if (crestNode < 0 || radius < tightestCrest) { crestNode = node; tightestCrest = radius; }
+                }
+                else if (radius < 0f)
+                {
+                    dips++;
+                    if (dipNode < 0 || -radius < tightestDip) { dipNode = node; tightestDip = -radius; }
+                }
+            }
+
+            string crestText = crestNode < 0 ? "none" : "tightest " + tightestCrest.ToString("0") + " m at node " + crestNode;
+            string dipText = dipNode < 0 ? "none" : "tightest " + tightestDip.ToString("0") + " m at node " + dipNode;
+            ARS.Log(ARS.LogImportance.Info, "Crest field: " + crests + " crest nodes (" + crestText + "), " + dips + " dip nodes (" + dipText + ")");
         }
 
         static void RecomputeCumulativeDistances()
@@ -859,6 +897,7 @@ namespace ARS
             }
 
             AssignCrests(nodeCount);
+            BuildCrestRegions(nodeCount);
             AssignBumpNodes(nodeCount);
             MoveEntrancesForFeatures(nodeCount);
             BuildLaneField(nodeCount);
@@ -1122,6 +1161,132 @@ namespace ARS
                 ARS.Log(ARS.LogImportance.Info, (c.Type == CrestType.Crest ? "Crest" : "Dip") + " node=" + c.Node + " gs@100mph=" + c.GsAt100Mph.ToString("0.00"));
             }
             ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips (sign change in local grade over " + window + "-node sample, gs at 100mph)");
+        }
+
+        // The crest as a feature, walked as contiguous runs of crest-signed nodes. Reads only TrackPoint.CrestRadius,
+        // so it is the field's projection rather than a second detector.
+        static void BuildCrestRegions(int count)
+        {
+            ARS.CrestRegions.Clear();
+            if (count < 3) return;
+
+            if (ARS.IsPointToPoint)
+            {
+                int runStart = -1;
+                int runEnd = -1;
+                for (int node = 0; node < count; node++)
+                {
+                    if (ARS.TrackPoints[node].CrestRadius > 0f)
+                    {
+                        if (runStart < 0) runStart = node;
+                        runEnd = node;
+                    }
+                    else if (runStart >= 0)
+                    {
+                        AddCrestRegion(runStart, runEnd, count);
+                        runStart = -1;
+                        runEnd = -1;
+                    }
+                }
+                if (runStart >= 0) AddCrestRegion(runStart, runEnd, count);
+                return;
+            }
+
+            // A closed route has no natural start: begin at the first node that is not crest-signed, so a run crossing
+            // the index seam stays one crest instead of two.
+            int start = -1;
+            for (int node = 0; node < count; node++)
+            {
+                if (ARS.TrackPoints[node].CrestRadius <= 0f) { start = node; break; }
+            }
+            if (start < 0) return;
+
+            int begin = -1;
+            int end = -1;
+            for (int step = 1; step <= count; step++)
+            {
+                int node = Wrap(start + step, count);
+                if (ARS.TrackPoints[node].CrestRadius > 0f)
+                {
+                    if (begin < 0) begin = node;
+                    end = node;
+                }
+                else if (begin >= 0)
+                {
+                    AddCrestRegion(begin, end, count);
+                    begin = -1;
+                }
+            }
+        }
+
+        static void AddCrestRegion(int firstNode, int lastNode, int count)
+        {
+            int peak = -1;
+            float radius = float.MaxValue;
+            float length = 0f;
+            int nodes = 0;
+            int node = firstNode;
+            for (int step = 0; step < count; step++)
+            {
+                float crestRadius = ARS.TrackPoints[node].CrestRadius;
+                if (crestRadius > 0f && crestRadius < radius)
+                {
+                    radius = crestRadius;
+                    peak = node;
+                }
+                nodes++;
+                if (node == lastNode) break;
+
+                int next = ARS.IsPointToPoint ? Math.Min(node + 1, count - 1) : Wrap(node + 1, count);
+                if (next == node) break;
+                length += ARS.TrackPoints[node].Position.DistanceTo2D(ARS.TrackPoints[next].Position);
+                node = next;
+            }
+
+            if (peak < 0) return;
+            ARS.CrestRegions.Add(new CrestRegion
+            {
+                FirstNode = firstNode,
+                PeakNode = peak,
+                LastNode = lastNode,
+                Wraps = !ARS.IsPointToPoint && firstNode > lastNode,
+                NodeCount = nodes,
+                LengthMeters = length,
+                Radius = radius,
+            });
+        }
+
+        // The table: one line per crest, tightest first, capped so a lap with two hundred of them stays readable.
+        static void LogCrestRegions()
+        {
+            if (ARS.LogLevel > ARS.LogImportance.Info) return;
+
+            int regions = ARS.CrestRegions.Count;
+            if (regions == 0)
+            {
+                ARS.Log(ARS.LogImportance.Info, "Crest regions: none");
+                return;
+            }
+
+            List<CrestRegion> ranked = new List<CrestRegion>(ARS.CrestRegions);
+            ranked.Sort((a, b) => a.Radius.CompareTo(b.Radius));
+
+            int longOnes = 0;
+            foreach (CrestRegion region in ranked) if (region.LengthMeters >= 10f) longOnes++;
+            ARS.Log(ARS.LogImportance.Info, "Crest regions: " + regions + " (" + longOnes + " at least 10 m long), tightest "
+                + ranked[0].Radius.ToString("0") + " m at node " + ranked[0].PeakNode);
+
+            const int shown = 12;
+            for (int i = 0; i < Math.Min(shown, regions); i++)
+            {
+                CrestRegion region = ranked[i];
+                ARS.Log(ARS.LogImportance.Info, "  crest " + (i + 1) + ": peak=" + region.PeakNode
+                    + " span=" + region.FirstNode + "-" + region.LastNode
+                    + " len=" + region.LengthMeters.ToString("0") + "m nodes=" + region.NodeCount
+                    + " R=" + region.Radius.ToString("0") + "m");
+            }
+            if (regions > shown)
+                ARS.Log(ARS.LogImportance.Info, "  ... " + (regions - shown) + " wider crests, out to " + ranked[regions - 1].Radius.ToString("0") + " m");
         }
 
         static bool TryResolveNode(int node, int count, out int resolved)
