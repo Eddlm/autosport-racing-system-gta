@@ -30,7 +30,7 @@ Most driving AI in this game is answering the road in front of it: it is told wh
 
 ARS cars arrive knowing. When a track loads, the route is read once and cut into the corners along it: where each turn-in starts, where the apex sits, where the corner ends, how tight it is and what kind of corner it is. A chicane is flagged so the plan can give it a flick's worth of speed. That description of the road is shared by the whole field, so no car's idea of where a corner is depends on what it happened to notice.
 
-The difference shows in the preparation. On a tight corner a rival takes the long way round — swings to the outside, brakes, and turns in — because it knows the corner is there and where it wants to be for it. The same read is what slows a car for a crest that would unload it, and what makes the braking start at a place rather than at a feeling.
+The difference shows in the preparation. On a tight corner a rival takes the long way round — swings to the outside, brakes, and turns in — because it knows the corner is there and where it wants to be for it. The same read is what slows a car for a crest that would unload it — on the road ahead of it, or at a corner's own apex, where the unload would land on the tyre at the moment it needs its load most — and what makes the braking start at a place rather than at a feeling.
 
 **What you notice:** a rival takes the outside line into a tight corner while you are still aiming at the apex.
 

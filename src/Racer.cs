@@ -2307,6 +2307,16 @@ const float RequirementLookaheadSeconds = 3.95f;
                 return;
             }
 
+            CornerPoint judgedCorner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
+            bool crestCapped = false;
+            if (judgedCorner != null) ARS.CornerApexSpeed(judgedCorner, this, out crestCapped);
+            if (crestCapped)
+            {
+                AnnounceCornerSpeedAdjustment(CornerId(apexNode) + " · crest caps the apex, nothing to learn",
+                    "crest - no change");
+                return;
+            }
+
             _cornerSpeedLocked.Add(apexNode);
 
             float before = TryGetCornerContext(apexNode, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
@@ -2754,9 +2764,22 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             CrestRegion crest = ARS.CrestRegions[region];
             crestNode = crest.PeakNode;
-            if (crest.Radius <= 0f) return 999f;
+            return CrestCeilingAt(crestNode);
+        }
 
-            return (float)Math.Sqrt(ARS.MaxCrestLift * Handling.Gravity * crest.Radius);
+        // The speed at which a crest of this radius unloads the car by exactly MaxCrestLift: v^2 / (R * g) = MaxCrestLift.
+        // One formula for the route term and the corner apex, so the two cannot disagree about what a crest costs.
+        public float CrestCeilingAt(int node)
+        {
+            if (!TrackSpeed.CrestGate) return 999f;
+
+            int count = ARS.TrackPoints.Count;
+            if (node < 0 || node >= count) return 999f;
+
+            float radius = ARS.TrackPoints[node].CrestRadius;
+            if (radius <= 0f) return 999f;
+
+            return (float)Math.Sqrt(ARS.MaxCrestLift * Handling.Gravity * radius);
         }
 
         float ComputeRubberBandFactor()

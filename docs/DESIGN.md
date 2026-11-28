@@ -208,27 +208,36 @@ carries the route term itself — so the apex seed always has something to seed.
 
 **The road's own shape corrects both terms.** A hill takes grip from both — the route term at the follow
 point, the corner at its apex inside its braking map, where its grade enters as a deceleration change rather
-than a speed factor. Vertical curvature is a route-side term only: a ceiling from the crest node's own speed inside
-a window ahead of the car, so a crest that unloads it is felt before it is met, and the corner side has no
-such term. A chicane is the one automatic relaxation: both terms get a boost, because a flick is not a corner
-in the sense the geometry takes it for.
+than a speed factor. The crest is a ceiling in both places: on the route from the strictest crest region overlapping
+a two-second window ahead of the car, and on the corner from the crest standing on the apex itself, read straight from
+the field, because that is where the tyre needs its normal load most and a braking ramp pointed at the ceiling will
+brake for it. A corner whose apex is crest-capped teaches its learner nothing — the pass measured the crest, not the
+corner — so it voids the verdict instead of crediting the corner with a clean line. A chicane is the one automatic
+relaxation: both terms get a boost, because a flick is not a corner in the sense the geometry takes it for.
 
 **Every node carries its vertical shape, the way it carries its horizontal one.** `TrackPoint.CrestRadius` is the
 signed radius through that node's own neighbour sample (`CrestSampleNodes`), crest positive, zero where the road runs
 straight, and it comes from one kernel (`CrestCurvature`) that the gate's hill-grip read shares, so the field and the
 gate cannot disagree about what a crest is. It measures the whole chord, not the sharpest metre inside it: a broad
 crest reads true, a short roof reads shallower than its peak, because the sample is longer than the car's wheelbase.
-The gate no longer fits the road: it takes the crest node inside that same two-second span and caps the route offer
-with that node's own speed — the speed at which the crest unloads the car by exactly `MaxCrestLift` — but only while
-the speed node itself is a bend (`CrestIgnoreAboveRouteRadiusMeters`). On an open radius the crest is ignored: a crest
-there costs no cornering grip, and a rail crossing would otherwise read as a few-metre crest and stop the car. So the
-number on the track analysis is the number being applied, and a crest is a ceiling in the same unit as the speed
-node's speed, not a share of an open radius that a straight inflates far past any cap.
+The gate no longer fits the road: it takes the strictest crest region that overlaps that same two-second span — the
+one the car is standing on included — and caps the route offer with that region's own speed: the speed at which the
+crest unloads the car by exactly `MaxCrestLift`. It does so only while the speed node itself is a bend
+(`CrestIgnoreAboveRouteRadiusMeters`); on an open radius the crest is ignored, because a crest there costs no cornering
+grip and a rail crossing would otherwise read as a few-metre crest and stop the car. So the number on the track
+analysis is the number being applied, and a crest is a ceiling in the same unit as the speed node's speed, not a share
+of an open radius that a straight inflates far past any cap.
 
 The field is then read once at load into a table of **crest regions** — contiguous stretches of crest-signed road,
 each with its peak node, its first and last node, its length and the radius that peak reads. It is static, so it is
 built once and logged with the track, and it is where a crest's *length* becomes visible: a short kick and a long
 crest can read the same radius and do not cost the car the same time.
+
+The same field answers the corner, and there it needs no region at all: the apex is one node, so the cap is a single
+read of that node's radius against the same `MaxCrestLift`. Where that can bite was measured rather than assumed — the
+share of each track whose crest ceiling falls below 60 / 80 mph runs from Figureight 0.0 / 1.2 % and By The Highway
+0.6 / 2.3 % to El Burro 7.7 / 16.5 % and Offroad 8.6 / 16.8 %. So the change lands on the rally and offroad tracks and
+the paved circuits are untouched by construction, which a first drive confirmed: Figureight did not move.
 
 **Where the plan meets the moment.** The pedals are not the plan's number. They map the speed error through
 one linear law — with a single deliberate exception below a walking pace, where a sub-split throttle is

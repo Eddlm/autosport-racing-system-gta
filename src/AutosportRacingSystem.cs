@@ -2215,9 +2215,14 @@ namespace ARS
                         string cornerSpeedLine = apexReader != null
                             ? "~n~" + apexReader.CornerSpeedOffsetFor(marked.Node).ToString("+0.0;-0.0;0", CultureInfo.InvariantCulture) + " m/s"
                             : string.Empty;
+                        bool apexCrestCapped = false;
+                        if (apexReader != null) ARS.CornerApexSpeed(marked, apexReader, out apexCrestCapped);
+                        string crestLine = apexCrestCapped
+                            ? "~n~crest " + Math.Round(ARS.MpsToMph(apexReader.CrestCeilingAt(marked.Node))).ToString(CultureInfo.InvariantCulture) + " mph"
+                            : string.Empty;
                         DrawText(apexPos, "Apex #" + (apexIndex + 1) + "~n~"
                             + Math.Round(marked.DetectedRadius) + "r"
-                            + brakeLine + cornerSpeedLine,
+                            + brakeLine + cornerSpeedLine + crestLine,
                             Color.White, 0.5f);
                     }
 
@@ -3254,6 +3259,27 @@ namespace ARS
         }
 
         public static float CornerApexSpeed(CornerPoint c, Racer r)
+        {
+            return CornerApexSpeed(c, r, out _);
+        }
+
+        // The crest at the apex caps the corner's held speed: the unload lands exactly where the tyre needs its normal
+        // load most, so the apex is the one node that has to survive it. crestCapped says whether that ceiling is what
+        // fixed the number, so the learner and the readout can name the crest instead of blaming the corner.
+        public static float CornerApexSpeed(CornerPoint c, Racer r, out bool crestCapped)
+        {
+            crestCapped = false;
+            if (r == null) return AiConstants.MaxIntendedSpeedMps;
+
+            float apexSpeed = CornerApexSpeedUncapped(c, r);
+            float crestCeiling = r.CrestCeilingAt(c.Node);
+            if (crestCeiling >= apexSpeed) return apexSpeed;
+
+            crestCapped = true;
+            return Math.Max(crestCeiling, AiConstants.MinIntendedSpeedMps);
+        }
+
+        public static float CornerApexSpeedUncapped(CornerPoint c, Racer r)
         {
 
             float radius = c.DetectedRadius;
