@@ -969,7 +969,7 @@ namespace ARS
             };
             rivalPaceMenu.Add(brakeLearningItem);
 
-            NativeCheckboxItem cornerSpeedLearningItem = new NativeCheckboxItem("Corner Speed Learning", "Each corner learns how much speed rivals dare to carry through it: the learned number is an offset in m/s on the corner's target, starting at the Corner Speed Offset setting. Past the apex, while sliding past twice the modelled peak slip, the pass keeps the least clearance between the car's outer side and that corner's outer road edge; more clearance raises the offset, less lowers it, at 0.5 m/s per metre. Off stops the learning and leaves every corner on the seeded offset.", CornerSpeedLearning);
+            NativeCheckboxItem cornerSpeedLearningItem = new NativeCheckboxItem("Corner Speed Learning", "Each corner learns how much speed rivals dare to carry through it: the learned number is an offset in m/s on the corner's target, starting at the Corner Speed Offset setting. Past the apex, while sliding past twice the modelled peak slip, the pass keeps the least clearance between the car's outer side and that corner's outer road edge; more clearance raises the offset, less lowers it, at 0.5 m/s per metre. Leaving the road pays 0.5 m/s flat whatever the slides did; a pass that rode past the model's own peak slip without a qualifying slide holds the offset instead of paying a rise, because a corner at its modelled limit has no spare left to earn. Off stops the learning and leaves every corner on the seeded offset.", CornerSpeedLearning);
             cornerSpeedLearningItem.CheckboxChanged += (sender, args) =>
             {
                 CornerSpeedLearning = cornerSpeedLearningItem.Checked;

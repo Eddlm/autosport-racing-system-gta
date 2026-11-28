@@ -393,6 +393,11 @@ namespace ARS
         // the tyre curve bottoms at 2.5x the peak angle, so 2.0 sits near the actual give-up.
         const float CornerSpeedLearnMinSlideShare = 2f;
 
+        // Rise gate: a pass whose worst slide share stayed under here never touched the give-up shoulder (1.0 = the
+        // model's own peak angle), so the speedpoint still had spare and the rise is real. Past it the corner is at
+        // its limit and the offset holds.
+        const float CornerSpeedLearnRideShare = 1.05f;
+
         const int CornerSpeedLearnQuietContactMs = 4000;
 
         const int CornerSpeedLearnHitOffTrackMs = 1000;
@@ -418,6 +423,7 @@ namespace ARS
                 const float RouteSpeedLearnMinStabilityCap = 0.999f;
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedLastSampleMs = -1;
+        float _cornerSpeedWorstSlideShare;
         float _cornerSpeedMinOutsideClearanceMetres = float.MaxValue;
         bool _cornerSpeedHitOffTrack;
         int _cornerSpeedOutsideSamples;
@@ -2256,7 +2262,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerSpeedLastSampleMs = VehicleData.LastAccelSampleTime;
             float slide = Math.Abs(VehicleData.SlideAngle);
             if (float.IsNaN(slide) || float.IsInfinity(slide)) return;
-            if (slide / TRLateralAtSpeed < CornerSpeedLearnMinSlideShare) return;
+            float slideShare = slide / TRLateralAtSpeed;
+            if (slideShare > _cornerSpeedWorstSlideShare) _cornerSpeedWorstSlideShare = slideShare;
+            if (slideShare < CornerSpeedLearnMinSlideShare) return;
 
             float signedOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
             float outsideReach = signedOffset * outsideSign + VehicleData.SlidingWidthMetres * 0.5f;
@@ -2276,6 +2284,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerSpeedLastSampleMs = -1;
             _cornerSpeedMinOutsideClearanceMetres = float.MaxValue;
             _cornerSpeedOutsideSamples = 0;
+            _cornerSpeedWorstSlideShare = 0f;
             _cornerSpeedHitOffTrack = false;
         }
 
@@ -2291,23 +2300,25 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerSpeedApexNode = -1;
             if (apexNode < 0) return;
 
+            if (_cornerSpeedHitOffTrack)
+            {
+                float hitBefore = TryGetCornerContext(apexNode, out CornerContext hitContext) ? hitContext.CornerSpeedOffsetMps : 0f;
+                float hitAfter = ARS.Clamp(hitBefore - CornerSpeedLearnDeltaLimitMps,
+                    -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
+                CornerContextForWrite(apexNode).CornerSpeedOffsetMps = hitAfter;
+                float hitApplied = hitAfter - hitBefore;
+                string hitDelta = (hitApplied >= 0f ? "+" : "")
+                    + hitApplied.ToString("0.00", CultureInfo.InvariantCulture) + " m/s";
+                string hitWhen = MsSinceContact() < CornerSpeedLearnQuietContactMs
+                    ? " " + MsSinceContact() + " ms ago"
+                    : "";
+                AnnounceCornerSpeedAdjustment(CornerId(apexNode) + " · off track" + hitWhen + " · " + hitDelta,
+                    "~r~off track~w~ - " + hitDelta);
+                return;
+            }
+
             if (MsSinceContact() < CornerSpeedLearnQuietContactMs)
             {
-
-                if (_cornerSpeedHitOffTrack)
-                {
-                    float hitBefore = TryGetCornerContext(apexNode, out CornerContext hitContext) ? hitContext.CornerSpeedOffsetMps : 0f;
-                    float hitAfter = ARS.Clamp(hitBefore - CornerSpeedLearnDeltaLimitMps,
-                        -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
-                    CornerContextForWrite(apexNode).CornerSpeedOffsetMps = hitAfter;
-                    float hitApplied = hitAfter - hitBefore;
-                    string hitDelta = (hitApplied >= 0f ? "+" : "")
-                        + hitApplied.ToString("0.00", CultureInfo.InvariantCulture) + " m/s";
-                    AnnounceCornerSpeedAdjustment(CornerId(apexNode) + " · hit off track, " + MsSinceContact()
-                        + " ms ago · " + hitDelta, "~r~hit off track~w~ - " + hitDelta);
-                    return;
-                }
-
                 AnnounceCornerSpeedAdjustment(CornerId(apexNode) + " · voided, contact " + MsSinceContact() + " ms ago",
                     "hit - no change");
                 return;
@@ -2332,6 +2343,13 @@ const float RequirementLookaheadSeconds = 3.95f;
                     return;
                 delta = verdictClearance * CornerSpeedLearnMetreToOffset;
             }
+            else if (_cornerSpeedWorstSlideShare >= CornerSpeedLearnRideShare)
+            {
+                string shareText = _cornerSpeedWorstSlideShare.ToString("0.0", CultureInfo.InvariantCulture);
+                AnnounceCornerSpeedAdjustment(id + " · rode the limit " + shareText + "x, holding",
+                    "on it - no change");
+                return;
+            }
 
             delta = ARS.Clamp(delta, -CornerSpeedLearnDeltaLimitMps, CornerSpeedLearnDeltaLimitMps);
 
@@ -2343,7 +2361,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             string deltaText = (applied >= 0f ? "+" : "") + applied.ToString("0.00", CultureInfo.InvariantCulture) + " m/s";
             string peakText = hadSlipSample
                 ? "closest " + clearance.ToString("0.0", CultureInfo.InvariantCulture) + " m"
-                : "no slide";
+                : "no slide, rode " + _cornerSpeedWorstSlideShare.ToString("0.0", CultureInfo.InvariantCulture) + "x";
             string offtrack = hadSlipSample && clearance < 0f ? " · ~r~offtrack~w~" : "";
 
             string reasonText = hadSlipSample ? clearance.ToString("0.0", CultureInfo.InvariantCulture) + " m" : "no slide";
