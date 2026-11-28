@@ -1401,10 +1401,11 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             passLane = passLeft ? rivalLane - buffer - carHalfWidth : rivalLane + buffer + carHalfWidth;
 
-            const float SideFlipRadiusFloor = 200f;
             const float SideFlipMinClearanceMeters = 1f;
             bool canChangeSide = Math.Abs(rival.RouteGapAhead) >= SideFlipMinClearanceMeters;
-            if (canChangeSide && Math.Abs(passLane) > trackBound && Brain.CurrentPerception.CurveRadiusToFollowPoint > SideFlipRadiusFloor)
+            // A blocked open side flips at any radius — the old 200 m floor refused exactly the corner passes it wants;
+            // the overflow check below still refuses what cannot physically fit.
+            if (canChangeSide && Math.Abs(passLane) > trackBound)
             {
                 passLane = passLeft ? rivalLane + buffer + carHalfWidth : rivalLane - buffer - carHalfWidth;
                 passLeft = !passLeft;
