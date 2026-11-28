@@ -1,12 +1,141 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **2090** (`4b1ee31c966b`). **AS** is verified (2026-11-26) and **AR** visually verified; every other section from **AF** up is **compile-only** — **AQ**, **AP**, **AO**, **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, **AF**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **2143** (`51957b0a025de1d5`). What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **78 open rows below**; everything already driven or disposed of
-sits in **Answered** at the bottom, out of the way, with **81** closed rows under it. The detail of the 30-10 hunt
+**Section P is closed** (all eighteen verified). Open ledger measured 2026-11-28: **18 prose sections** (route-speed era onward, pass conditions in prose) and **86 pipe-rows** (AB back to AF).
+Everything answered or disposed of sits in **Answered** at the bottom, out of the way, kept for provenance. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
+
+---
+
+## AX · 2026-11-28 (2143 → 2146) — the figureight isolation: the learner stops paying rises to a sleeping referee
+
+His isolation run (single AI, Figureight) exposed both holes: the notification showed repeating `no slide` +2 m/s
+rises on a corner the car was **respecting** — the 2.0× sampling gate (today's A) put the referee to sleep exactly
+while the car rides the peak, so the no-sample default (`CornerSpeedLearnNoSlideRiseMps`) fired every pass — and a
+pass that **left the road** collected it too, because off-track without contact never reached a verdict.
+
+Two fixes, one commit (`5b21245`, build 2145; a lost ternary half cost the failed 2144):
+
+- **The ride gate (`CornerSpeedLearnRideShare` = 1.05).** The update ticks track the pass's worst slide share
+  (`slide / TRLateralAtSpeed`) before the sampling gate; at commit, a no-sample pass that rode past the model's own
+  peak angle **holds** (`rode the limit 1.2x, holding`) — the offset stays because a corner at its modelled limit
+  has no spare left to earn. Only a pass under the shoulder rises. The rises/holds carry the share
+  (`no slide, rode 0.8x`) so the 1.05 is tunable from the mark.
+- **Off-track pays flat.** `_cornerSpeedHitOffTrack` hoisted out of the contact branch: any flagged pass pays
+  −2 m/s (`off track · −2.00 m/s`, with the contact age when one happened), contact without off-track keeps its
+  void. The menu's first cut named the wrong number (0.5 = the per-metre slope, not the flat) — corrected in 2146
+  (`9f808f9`): the flat is the ±2 m/s step cap.
+
+Pass condition: on the same figureight run, a corner the car respects shows **holds or −2s**, never a chain of
+`+2 m/s` no-slide rises; the rode shares on rise lines stay under ~1.0; a corner still taken past the model
+converges through the sampled clearance verdicts as before.
+
+---
+
+## AT · 2026-11-28 (2141 → 2143) — the learner retune: brake step capped, the corner-speed verdict loses its guards
+
+Two learners, one build spread: **brake factor** (2141) — the per-verdict step caps at ±0.1
+(`BrakeFactorStepLimit`); a miss deeper than ~5.6 mph over or ~3.4 mph under the ramp no longer swings the
+dial half a notch per pass, and a bound step prints `step capped` in the brake-ramp line. **Corner speed**
+(2143, commit `12c7666`) — the A/D retune: the slide sampling gate reads twice the modelled peak
+(`CornerSpeedLearnMinSlideShare` 0.75 → 2.0, the tyre curve's own floor at 2.5), the crest-capped void is
+gone (`crest - no change` no longer prints — capped passes judge normally and the ±2 m/s per-pass step is
+the bound), and the >20° lost-control guard is gone — a big slide is the hot entrance paying. Contact
+voids stay as they were (4 s window; a wheel off with contact pays −2 m/s). The dead `out crestCapped`
+overload folded into the two-arg `CornerApexSpeed`; the apex mark's `crest <mph>` line reads the cap
+directly.
+
+Pass condition: with `BrakeLearningNotify` on, brake factors move ≤ 0.1 per pass and hard misses print
+`step capped`; corner-speed verdicts land on crest-capped corners (the apex mark still shows the crest
+line while a rise may now land under it) and after deep slides (a >2x-peak slide with room to spare still
+raises), and a spin pays the road instead of being forgiven.
+
+---
+
+## AU · 2026-11-28 (2117 → 2140) — the brake learner: a real aim, then a parked one
+
+⬜ Not driven. Compile-only — 2117 and 2140 were never driven in isolation; what the road has felt since came
+from clusters further up this file.
+
+**The aim became a real distance (2117, `ef15427`).** The brake aim distance used to be one number for the whole
+route — the fixed 15 m node of **Y**. Each corner now carries its own `ApexSpeedBuffer`: 15 nodes of runway,
+stepped 5 nodes toward the apex every time that corner's brake factor rises. A corner the learner keeps missing
+deep walks its aim closer to the apex on the next rise; a corner with no history starts at the seed of 15. The
+brake ramp therefore brakes where the corner has already proved it needs to, instead of where a route-wide
+constant guessed.
+
+**Then the stepping parked (2140, `e6068ef`).** `BrakeBufferSteppingEnabled` ships false: the ramp's aim holds
+whatever node it holds and the seed stays 15, so the stepping cannot move underneath the front-slip trim while
+that trim is being read. Flipping the flag back to true re-opens the stepping with nothing else changed — the
+buffer, the step of 5 and the factor that drives it are all still there.
+
+The other half of the brake learner — the per-verdict factor step capped at ±0.1 — landed in 2141 and sits in
+**AT**, not repeated here.
+
+Pass condition: with `BrakeLearningNotify` on, the brake-ramp aim holds its node while `BrakeBufferSteppingEnabled`
+is false, and resumes stepping toward the apex on the next factor rise once the flag is flipped true.
+
+---
+
+## AV · 2026-11-28 (2119 → 2138) — the route-speed window and the crest stream
+
+⬜ Not driven, except the crest ceiling noted below.
+
+**The route speed became a window (2119 → 2121, `d311aa7`).** The per-section target-speed table that **AS**
+describes is gone: the route term now takes `SweepCurveRadius` over a one-second sliding window, and the table,
+its cursor, its apex clamp and its flanks are deleted. Speed at any node follows the road a second ahead in the
+travel direction rather than a value baked once per route revision — no per-section reset to cross, and no
+cursor to be on the wrong side of after a handover.
+
+**Elevation became a field (2130, `db659eb`).** Elevation is a per-node crest field with a region table, and the
+route speed is capped by that region's own speed instead of by one law applied over the whole route: a crest
+the car is climbing into gets the speed that crest allows.
+
+**The crest became a ceiling on apex speed (2130 → 2133, `ce6f4a6`).** ✅ **Driven 2026-11-28 and kept.** Corner
+apex speed is now what the crest allows — the apex ask cannot exceed the ceiling the elevation field puts over
+it, so the corner system stops demanding speed the rise cannot carry. The second half of that build, a
+crest-capped apex voiding its learner verdict rather than earning a rise, was superseded today by 2143
+(`12c7666`): the void is deleted and a capped pass now judges normally under the ±2 m/s per-pass bound. The
+ceiling itself stands.
+
+- **The cleanup that followed (2133 → 2137)** — `ecaa1a9` and `1a9340a`: docs corrected after review (a
+  crest-capped apex still deducts on contact; the anchored route window is gated by Route Radius), and the
+  plan's corner speed renamed `rampdownSpd` so his word for it is greppable in the code. `b94ea44`: the dead
+  leftovers a review found are deleted — the readerless `OneSec` lookahead, the always-minus-one far crest node
+  and its unreachable draw, two stale headers. `085708d`: `CrestRadius`/`CrestType` become
+  `CrestDipRadius`/`CrestDipType`, so the sign's two cases are both named. `dd43a5b`: bump lips store a crest
+  radius instead of a curvature, so the two vertical catalogues speak one unit. None of the four changes
+  behaviour.
+
+**The catalogue folded (2138, `4a38a75`).** ⬜ Compile-only, not driven: the grade-sign crest catalogue is
+folded away — entrance moves read the region table's peak, dip marks come from the field's `DipPeaks`, and
+elevation has one detector instead of a second catalogue kept alongside it.
+
+Pass condition: on a road with crests, the AI's apex speed holds to the crest ceiling with no launch-off
+behaviour over the rise, and the route speed follows the one-second window without the per-section resets the
+old table produced.
+
+---
+
+## AW · 2026-11-28 (2135 → 2137) — the pass-lane flip loses its radius floor
+
+✅ **Driven 2026-11-28** (his verdict, paraphrased from chat words): the flip on its own did not fix the corners —
+racers still end up stuck **outside** mid-corner, which opened today's inside-slip overtake thread.
+
+**The floor is gone (2135 → 2137, `7411d69`).** The pass-lane side flip used to refuse a corner tighter than
+200 m of radius, so the corners where a blocked open side hurts most were exactly the ones where it never
+fired. It now takes the rival's side in any corner. Two things stay: the overflow refusal, and
+`SideFlipMinClearanceMeters` — the flip only takes the far side when there is room for the car to fit there, so
+a blocked side with no room behind the rival is still refused rather than aimed at.
+
+**The comment sweep rides the next build (`fc03e22`).** The sweep's five restating comments die; every surviving
+comment passes the 10-second why-first test. Comment-only — no behaviour change.
+
+Pass condition: in a blocked corner of any radius — including one well under 200 m — the car takes the rival's
+side when `SideFlipMinClearanceMeters` allows the fit, and still refuses when the overflow would not clear.
 
 ---
 
